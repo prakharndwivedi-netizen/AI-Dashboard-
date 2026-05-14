@@ -2,7 +2,14 @@
  * Google Apps Script - Student Dashboard Backend
  */
 
-function doGet() {
+function doGet(e) {
+  // Support both HTML and JSON responses
+  if (e && e.parameter && e.parameter.format === 'json') {
+    const data = getSpreadsheetData();
+    return ContentService.createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   return HtmlService.createTemplateFromFile('index')
       .evaluate()
       .setTitle('Student Dashboard')
@@ -11,62 +18,65 @@ function doGet() {
 }
 
 /**
- * Fetches data from the spreadsheet.
- * Expected sheet name: "dataset" (or first sheet)
+ * Fetches and processes data from the spreadsheet with level-1 caching.
  */
 function getSpreadsheetData() {
+  const cache = CacheService.getScriptCache();
+  const cachedData = cache.get("spreadsheet_data");
+  
+  if (cachedData) {
+    try {
+      return JSON.parse(cachedData);
+    } catch (e) {
+      console.error("Cache parse error", e);
+    }
+  }
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('dataset') || ss.getSheets()[0];
-    const data = sheet.getDataRange().getValues();
+    const range = sheet.getDataRange();
+    const data = range.getValues();
     
     if (data.length < 2) return [];
     
-    const headers = data[0];
+    const headers = data[0].map(h => String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
     const rows = data.slice(1);
     
-    return rows.map(row => {
+    const processedData = rows.map((row, index) => {
       let obj = {};
-      headers.forEach((header, i) => {
-        // Map common header names to expected property names
-        const key = String(header).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      headers.forEach((key, i) => {
         let value = row[i];
-        
-        // Handle dates
         if (value instanceof Date) {
           value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
         }
-        
         obj[key] = value;
       });
       
-      // Extract specific metrics with priority logic
+      // Intelligent Mapping
       const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
       const collegeName = rawCollege.replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
       
       const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
       
-      // Determine Completion Percentage correctly
-      // We want the column that represents the PERCENT, not the date
+      // Completion Logic
       let completedValue = 0;
-      if (obj.completed !== undefined && !isNaN(parseFloat(obj.completed))) {
-        completedValue = parseFloat(obj.completed);
-      } else {
-        const compKey = Object.keys(obj).find(k => (k.includes('percent') || k === 'completed') && !k.includes('at'));
-        if (compKey) completedValue = parseFloat(obj[compKey]) || 0;
+      const compKey = Object.keys(obj).find(k => (k.includes('percent') || k === 'completed' || k === 'completion') && !k.includes('at'));
+      if (compKey) {
+        completedValue = parseFloat(obj[compKey]) || 0;
       }
 
-      // Check for 'Status' as a secondary indicator
-      if (completedValue < 100) {
-        const statusStr = String(obj.status || '').toLowerCase();
-        if (statusStr === 'completed' || statusStr === 'complete') completedValue = 100;
+      // Status Override
+      const statusStr = String(obj.status || '').toLowerCase();
+      if (statusStr === 'completed' || statusStr === 'complete' || completedValue >= 100) {
+        completedValue = 100;
       }
 
       return {
-        firstName: obj.firstname || obj.studentname?.split(' ')[0] || row[0] || '',
-        lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || row[1] || '',
+        id: index + 1,
+        firstName: obj.firstname || obj.studentname?.split(' ')[0] || String(row[0] || ''),
+        lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || String(row[1] || ''),
         email: obj.email || obj.emailid || '',
-        phone: obj.phone || obj.mobilenumber || '',
         college: collegeName || 'Unknown ITI',
         division: divisionName,
         district: obj.district || obj.homedistrict || '',
@@ -75,21 +85,26 @@ function getSpreadsheetData() {
         gender: obj.gender || obj.sex || 'Not Specified',
         category: obj.category || obj.socialcategory || 'General',
         incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-        year: obj.year || '',
         startedAt: obj.startedat || '',
         completedAt: obj.completedat || '',
         completedPercent: completedValue
       };
     });
+
+    // Cache the processed data for 10 minutes
+    try {
+      cache.put("spreadsheet_data", JSON.stringify(processedData), 600);
+    } catch (e) {
+      // If data is too large for cache (100KB limit), just skip caching
+    }
+
+    return processedData;
   } catch (error) {
-    console.error('Error fetching data:', error);
+    console.error('Data Fetching Critical Error:', error);
     return [];
   }
 }
 
-/**
- * Helper to include files in the template
- */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
