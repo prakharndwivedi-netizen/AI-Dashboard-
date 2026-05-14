@@ -14,6 +14,7 @@
   <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.0/dist/react-apexcharts.iife.min.js" crossorigin></script>
   <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js" crossorigin></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
   
   <script>
     window.onerror = function(msg, url, lineNo, columnNo, error) {
@@ -78,6 +79,15 @@
   <script type="text/babel">
     const { useState, useMemo, useEffect } = React;
     
+    /**
+     * GITHUB HOSTING OPTIMIZATION:
+     * To host this on GitHub and pull live data from Google Sheets:
+     * 1. In your Google Sheet, go to File > Share > Publish to web.
+     * 2. Select 'Entire Document' and 'Comma-separated values (.csv)'.
+     * 3. Copy the link and paste it below in GOOGLE_SHEET_CSV_URL.
+     */
+    const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9DApK8KKyzzUcIJK_EbtPCyAYVOqYLndR5O9obqyZoVBJzt5Yr10LYhEkrUEIkUzucVNhBkF2srgh/pub?gid=493239070&single=true&output=csv"; 
+
     // --- MANUAL APEX CHARTS BRIDGE ---
     const Chart = (props) => {
       const chartRef = React.useRef(null);
@@ -813,12 +823,13 @@
 
       const fetchData = () => {
         const mockData = [
-          { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General" },
-          { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC" },
-          { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC" },
-          { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General" },
+          { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100 },
+          { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45 },
+          { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100 },
+          { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100 },
         ];
 
+        // 1. Try Google Apps Script Environment (Native)
         if (typeof google !== 'undefined' && google.script && google.script.run) {
           google.script.run
             .withSuccessHandler((result) => {
@@ -831,14 +842,40 @@
               setLoading(false);
             })
             .getSpreadsheetData();
-        } else {
-          // Simulated delay for preview
-          setTimeout(() => {
-            setData(mockData);
-            setLoading(false);
-            setLastSync(new Date());
-          }, 1000);
+          return;
         }
+
+        // 2. Try External CSV Fetch (GitHub/Static Hosting Optimization)
+        if (GOOGLE_SHEET_CSV_URL) {
+          Papa.parse(GOOGLE_SHEET_CSV_URL, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.data && results.data.length > 0) {
+                setData(results.data);
+                setLastSync(new Date());
+              } else {
+                setData(mockData);
+              }
+              setLoading(false);
+            },
+            error: (err) => {
+              console.error("CSV Fetch Error:", err);
+              setData(mockData);
+              setLoading(false);
+            }
+          });
+          return;
+        }
+
+        // 3. Fallback to Mock Data (Preview Mode)
+        setTimeout(() => {
+          setData(mockData);
+          setLoading(false);
+          setLastSync(new Date());
+        }, 1000);
       };
 
       useEffect(() => {
