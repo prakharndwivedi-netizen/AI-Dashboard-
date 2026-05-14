@@ -9,6 +9,7 @@
   <!-- CDNs -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js" crossorigin></script>
@@ -153,13 +154,21 @@
     // --- UTILITIES ---
     const getAggregatedMetrics = (records) => {
       const registrations = records.length;
-      const completions = records.filter(r => r.completedPercent >= 100).length;
       
-      const muzTotal = records.filter(r => String(r.division || '').toLowerCase().includes('muzaffarpur')).length;
-      const muzCompleted = records.filter(r => String(r.division || '').toLowerCase().includes('muzaffarpur') && r.completedPercent >= 100).length;
+      const isCompleted = (r) => {
+        const val = parseFloat(r.completedPercent);
+        return !isNaN(val) && val >= 100;
+      };
 
-      const patnaTotal = records.filter(r => String(r.division || '').toLowerCase().includes('patna')).length;
-      const patnaCompleted = records.filter(r => String(r.division || '').toLowerCase().includes('patna') && r.completedPercent >= 100).length;
+      const completions = records.filter(isCompleted).length;
+      
+      const muzRecords = records.filter(r => String(r.division || '').toLowerCase().includes('muzaffarpur'));
+      const muzTotal = muzRecords.length;
+      const muzCompleted = muzRecords.filter(isCompleted).length;
+
+      const patnaRecords = records.filter(r => String(r.division || '').toLowerCase().includes('patna'));
+      const patnaTotal = patnaRecords.length;
+      const patnaCompleted = patnaRecords.filter(isCompleted).length;
 
       // Last 30 Days Logic
       const thirtyDaysAgo = new Date();
@@ -216,7 +225,7 @@
         
         colleges[name].registrations++;
         const pComp = parseFloat(r.completedPercent);
-        if (pComp >= 100) {
+        if (!isNaN(pComp) && pComp >= 100) {
           colleges[name].completions++;
           
           if (r.completedAt) {
@@ -244,7 +253,8 @@
       const stats = {};
       records.filter(r => r.startedAt || r.completedAt).forEach(r => {
         const regDate = r.startedAt ? new Date(r.startedAt) : null;
-        const compDate = (r.completedAt && r.completedPercent >= 100) ? new Date(r.completedAt) : null;
+        const compPercent = parseFloat(r.completedPercent) || 0;
+        const compDate = (r.completedAt && compPercent >= 100) ? new Date(r.completedAt) : null;
         
         const college = r.college || 'N/A';
         if (!stats[college]) stats[college] = { newRegs: 0, newComps: 0 };
@@ -282,7 +292,7 @@
       </div>
     );
 
-    const Dashboard = ({ data, onViewRegistry, lastSync }) => {
+    const Dashboard = ({ data, onViewRegistry, lastSync, isLive }) => {
       const [selectedDivision, setSelectedDivision] = useState('All');
       const [searchQuery, setSearchQuery] = useState('');
       const [reportSearch, setReportSearch] = useState('');
@@ -363,8 +373,8 @@
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-[#31B89D] text-[10px] font-bold uppercase tracking-widest opacity-70">Real-time performance distribution</p>
                 {metrics.hasData && (
-                  <span className="flex items-center gap-1 bg-brand/10 px-2 py-0.5 rounded text-[8px] font-bold text-brand uppercase">
-                    Data Synced Successfully
+                  <span className={`flex items-center gap-1 ${isLive ? 'bg-brand/10 text-brand' : 'bg-accent/10 text-accent'} px-2 py-0.5 rounded text-[8px] font-bold uppercase`}>
+                    {isLive ? 'Live Sync Active' : 'Offline / Demo Mode'}
                   </span>
                 )}
               </div>
@@ -820,104 +830,124 @@
       const [data, setData] = useState([]);
       const [loading, setLoading] = useState(true);
       const [lastSync, setLastSync] = useState(null);
+      const [isLive, setIsLive] = useState(false);
 
-      const fetchData = () => {
+      const fetchData = async () => {
         const mockData = [
-          { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100 },
-          { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45 },
-          { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100 },
-          { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100 },
+          { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+          { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: new Date().toISOString() },
+          { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+          { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
         ];
 
-        // 1. Try Google Apps Script Environment (Native)
+        const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+
+        // 1. Try Google Apps Script Native 
         if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run
+           console.log("Sync Action: Initializing via GAS native...");
+           google.script.run
             .withSuccessHandler((result) => {
               setData(result && result.length > 0 ? result : mockData);
               setLoading(false);
               setLastSync(new Date());
+              setIsLive(true);
             })
-            .withFailureHandler(() => {
+            .withFailureHandler((err) => {
+              console.error("Sync Failure (GAS):", err);
               setData(mockData);
               setLoading(false);
+              setIsLive(false);
             })
             .getSpreadsheetData();
           return;
         }
 
-        // 2. Try External CSV Fetch (GitHub/Static Hosting Optimization)
+        // 2. Try External CSV (GitHub/Public Link)
         if (GOOGLE_SHEET_CSV_URL) {
-          Papa.parse(GOOGLE_SHEET_CSV_URL, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-              if (results.data && results.data.length > 0) {
-                // Normalize and map data consistently with Code.gs
-                const processed = results.data.map((row, index) => {
-                  // Normalize keys to lowercase alphanumeric
-                  let obj = {};
-                  Object.keys(row).forEach(key => {
-                    const normalizedKey = String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-                    obj[normalizedKey] = row[key];
+          console.log("Sync Action: Initializing via CSV Fetch...");
+          try {
+            const fetchUrl = GOOGLE_SHEET_CSV_URL + (GOOGLE_SHEET_CSV_URL.includes('?') ? '&' : '?') + 'cache=' + Date.now();
+            const response = await fetch(fetchUrl);
+            const csvText = await response.text();
+            
+            Papa.parse(csvText, {
+              header: true,
+              dynamicTyping: true,
+              skipEmptyLines: true,
+              complete: (results) => {
+                if (results.data && results.data.length > 0) {
+                  const processed = results.data.map((row, index) => {
+                    let obj = {};
+                    Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
+
+                    // Map Logic
+                    const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
+                    const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
+                    const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+
+                    let completedValue = 0;
+                    const compKey = Object.keys(obj).find(k => 
+                      (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
+                    );
+                    if (compKey) {
+                      let rawVal = obj[compKey];
+                      if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
+                      completedValue = parseFloat(rawVal) || 0;
+                    }
+
+                    const statusStr = String(obj.status || '').toLowerCase();
+                    const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
+
+                    return {
+                      id: index + 1,
+                      firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
+                      lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
+                      email: obj.email || obj.emailid || '',
+                      college: collegeName || 'Unknown ITI',
+                      division: divisionName,
+                      district: obj.district || obj.homedistrict || '',
+                      trade: obj.trade || obj.tradename || obj.subject || '',
+                      status: finalized ? 'Completed' : 'In Progress',
+                      gender: obj.gender || obj.sex || 'Not Specified',
+                      category: obj.category || obj.socialcategory || 'General',
+                      incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
+                      startedAt: obj.startedat || obj.registrationdate || '',
+                      completedAt: obj.completedat || obj.completiondate || '',
+                      completedPercent: finalized ? 100 : completedValue
+                    };
                   });
-
-                  // Replicate Code.gs mapping logic for robustness
-                  const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
-                  const collegeName = rawCollege.replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
-                  const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
-
-                  let completedValue = 0;
-                  const compKey = Object.keys(obj).find(k => (k.includes('percent') || k === 'completed' || k === 'completion') && !k.includes('at'));
-                  if (compKey) {
-                    completedValue = parseFloat(obj[compKey]) || 0;
-                  }
-
-                  const statusStr = String(obj.status || '').toLowerCase();
-                  if (statusStr === 'completed' || statusStr === 'complete' || completedValue >= 100) {
-                    completedValue = 100;
-                  }
-
-                  return {
-                    id: index + 1,
-                    firstName: obj.firstname || obj.studentname?.split(' ')[0] || String(Object.values(row)[0] || ''),
-                    lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || String(Object.values(row)[1] || ''),
-                    email: obj.email || obj.emailid || '',
-                    college: collegeName || 'Unknown ITI',
-                    division: divisionName,
-                    district: obj.district || obj.homedistrict || '',
-                    trade: obj.trade || obj.tradename || '',
-                    status: completedValue >= 100 ? 'Completed' : 'In Progress',
-                    gender: obj.gender || obj.sex || 'Not Specified',
-                    category: obj.category || obj.socialcategory || 'General',
-                    incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-                    startedAt: obj.startedat || '',
-                    completedAt: obj.completedat || '',
-                    completedPercent: completedValue
-                  };
-                });
-                setData(processed);
-                setLastSync(new Date());
-              } else {
+                  setData(processed);
+                  setLastSync(new Date());
+                  setIsLive(true);
+                } else {
+                  console.warn("Sync Notice: No records found in CSV, using demo data.");
+                  setData(mockData);
+                  setIsLive(false);
+                }
+                setLoading(false);
+              },
+              error: (err) => {
+                console.error("Sync Failure (Parsing):", err);
                 setData(mockData);
+                setLoading(false);
+                setIsLive(false);
               }
-              setLoading(false);
-            },
-            error: (err) => {
-              console.error("CSV Fetch Error:", err);
-              setData(mockData);
-              setLoading(false);
-            }
-          });
+            });
+          } catch (fetchErr) {
+            console.error("Sync Failure (Network):", fetchErr);
+            setData(mockData);
+            setLoading(false);
+            setIsLive(false);
+          }
           return;
         }
 
-        // 3. Fallback to Mock Data (Preview Mode)
+        // 3. Absolute Fallback
         setTimeout(() => {
           setData(mockData);
           setLoading(false);
           setLastSync(new Date());
+          setIsLive(false);
         }, 1000);
       };
 
@@ -944,27 +974,7 @@
 
       return (
         <div className="min-h-screen flex flex-col">
-          <header className="bg-[#282828] text-white py-10 lg:py-16 px-6 lg:px-8 text-center shadow-2xl border-b-[8px] border-brand relative flex flex-col items-center justify-center">
-            {/* ITI Logo - Top Left */}
-            <div className="absolute left-4 top-4 lg:left-8 lg:top-8 bg-white/10 p-2 rounded-lg backdrop-blur-sm">
-              <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Directorate_General_of_Employment_and_Training_%28DGET%29_India.png/240px-Directorate_General_of_Employment_and_Training_%28DGET%29_India.png" 
-                alt="ITI Logo" 
-                className="h-10 lg:h-16 w-auto"
-                onError={(e) => { e.target.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Directorate_General_of_Employment_and_Training_%28DGET%29_India.png/240px-Directorate_General_of_Employment_and_Training_%28DGET%29_India.png" }}
-              />
-            </div>
-            
-            {/* Medha Logo - Top Right */}
-            <div className="absolute right-4 top-4 lg:right-8 lg:top-8 bg-white p-2 rounded-lg shadow-sm">
-              <img 
-                src="https://www.medha.org.in/wp-content/uploads/2021/04/Medha-Logo-01.png" 
-                alt="Medha Logo" 
-                className="h-10 lg:h-16 w-auto"
-                onError={(e) => { e.target.src = "https://medha.org.in/wp-content/uploads/2021/04/Medha-Logo-01.png" }}
-              />
-            </div>
-
+          <header className="bg-[#282828] text-white py-12 lg:py-20 px-6 lg:px-8 text-center shadow-2xl border-b-[8px] border-brand relative flex flex-col items-center justify-center">
             <div className="max-w-4xl mx-auto relative z-10">
               <h1 className="text-4xl lg:text-7xl font-black tracking-tighter uppercase mb-4 leading-none">AI Progress Dashboard</h1>
               <p className="text-xs lg:text-base font-bold tracking-[0.4em] text-brand uppercase">Intelligent Skill Tracking & Performance Metrics</p>
@@ -1003,6 +1013,7 @@
                 <Dashboard 
                   data={data} 
                   lastSync={lastSync}
+                  isLive={isLive}
                   onViewRegistry={(college) => {
                     setRegistryFilter(college);
                     setActiveTab('students');
