@@ -854,7 +854,50 @@
             skipEmptyLines: true,
             complete: (results) => {
               if (results.data && results.data.length > 0) {
-                setData(results.data);
+                // Normalize and map data consistently with Code.gs
+                const processed = results.data.map((row, index) => {
+                  // Normalize keys to lowercase alphanumeric
+                  let obj = {};
+                  Object.keys(row).forEach(key => {
+                    const normalizedKey = String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                    obj[normalizedKey] = row[key];
+                  });
+
+                  // Replicate Code.gs mapping logic for robustness
+                  const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
+                  const collegeName = rawCollege.replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
+                  const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+
+                  let completedValue = 0;
+                  const compKey = Object.keys(obj).find(k => (k.includes('percent') || k === 'completed' || k === 'completion') && !k.includes('at'));
+                  if (compKey) {
+                    completedValue = parseFloat(obj[compKey]) || 0;
+                  }
+
+                  const statusStr = String(obj.status || '').toLowerCase();
+                  if (statusStr === 'completed' || statusStr === 'complete' || completedValue >= 100) {
+                    completedValue = 100;
+                  }
+
+                  return {
+                    id: index + 1,
+                    firstName: obj.firstname || obj.studentname?.split(' ')[0] || String(Object.values(row)[0] || ''),
+                    lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || String(Object.values(row)[1] || ''),
+                    email: obj.email || obj.emailid || '',
+                    college: collegeName || 'Unknown ITI',
+                    division: divisionName,
+                    district: obj.district || obj.homedistrict || '',
+                    trade: obj.trade || obj.tradename || '',
+                    status: completedValue >= 100 ? 'Completed' : 'In Progress',
+                    gender: obj.gender || obj.sex || 'Not Specified',
+                    category: obj.category || obj.socialcategory || 'General',
+                    incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
+                    startedAt: obj.startedat || '',
+                    completedAt: obj.completedat || '',
+                    completedPercent: completedValue
+                  };
+                });
+                setData(processed);
                 setLastSync(new Date());
               } else {
                 setData(mockData);
