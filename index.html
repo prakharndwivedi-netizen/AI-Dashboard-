@@ -360,22 +360,26 @@
       const incomeDistribution = useMemo(() => getDistribution(filteredData, 'incomeLevel'), [filteredData]);
       const categoryDistribution = useMemo(() => getDistribution(filteredData, 'category'), [filteredData]);
 
-      const CHART_COLORS = ['#31B89D', '#FF9700', '#4FD3A8', '#FFB900', '#B2FFE0', '#FCE7B3', '#282828'];
+      const CHART_COLORS = ['#31B89D', '#FF9700', '#4FD3A8', '#FFB900', '#B2FFE0', '#FCE7B3', '#12314C'];
 
       const commonOptions = {
         chart: { toolbar: { show: false }, zoom: { enabled: false } },
         colors: CHART_COLORS,
         legend: { position: 'bottom', fontSize: '10px', labels: { colors: '#31B89D' } },
         dataLabels: { enabled: false },
+        tooltip: {
+          theme: 'light',
+          style: { fontSize: '12px', fontFamily: 'Inter' }
+        }
       };
 
       const areaOptions = {
         ...commonOptions,
-        stroke: { curve: 'smooth', width: 2 },
-        fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0.1 } },
-        xaxis: { labels: { style: { colors: '#282828', fontSize: '8px' } } },
-        yaxis: { labels: { style: { colors: '#282828' } } },
-        markers: { size: 4, strokeWidth: 2 }
+        stroke: { curve: 'smooth', width: 3 },
+        fill: { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.05 } },
+        xaxis: { labels: { style: { colors: '#31B89D', fontSize: '9px', fontWeight: 700 } } },
+        yaxis: { labels: { style: { colors: '#FF9700', fontWeight: 700 } } },
+        markers: { size: 5, strokeWidth: 3, hover: { size: 7 } }
       };
 
       useEffect(() => {
@@ -456,8 +460,8 @@
                 {/* Top 10 Colleges */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-dark flex items-center gap-2">
-                      <i data-lucide="award" className="w-4 h-4 text-brand"></i>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
+                      <i data-lucide="award" className="w-4 h-4 text-brand-green"></i>
                       Top 10 Colleges (Completions)
                     </h3>
                   </div>
@@ -482,8 +486,8 @@
                 {/* Bottom 10 Colleges (30-50% Efficiency) */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-dark flex items-center gap-2">
-                      <i data-lucide="alert-circle" className="w-4 h-4 text-accent"></i>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange flex items-center gap-2">
+                      <i data-lucide="alert-circle" className="w-4 h-4 text-brand-orange"></i>
                       Critical Watch: Bottom 10 (30-50% Eff.)
                     </h3>
                   </div>
@@ -513,19 +517,19 @@
               {/* Insight Analysis Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-dark mb-6 text-center">Gender Demographics</h3>
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-6 text-center">Gender Demographics</h3>
                    <div className="h-[280px]">
                      <Chart options={{...commonOptions, labels: genderDistribution.map(d => d.name)}} series={genderDistribution.map(d => d.value)} type="donut" height="100%" />
                    </div>
                 </div>
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-dark mb-6 text-center">Category Distribution</h3>
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange mb-6 text-center">Category Distribution</h3>
                    <div className="h-[280px]">
                      <Chart options={{...commonOptions, labels: categoryDistribution.map(d => d.name)}} series={categoryDistribution.map(d => d.value)} type="pie" height="100%" />
                    </div>
                 </div>
                 <div className="md:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-dark mb-6">Family Income Level Analysis</h3>
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-6">Family Income Level Analysis</h3>
                    <div className="h-[350px]">
                      <Chart 
                        options={{
@@ -547,8 +551,8 @@
             <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-dark flex items-center gap-2">
-                    <i data-lucide="file-text" className="w-4 h-4 text-brand"></i>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
+                    <i data-lucide="file-text" className="w-4 h-4 text-brand-green"></i>
                     Performance Reports
                   </h3>
                   <div className="relative">
@@ -640,7 +644,7 @@
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Overall Progress Chart */}
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-dark mb-4">Overall Funnel Analysis</h5>
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-4">Overall Funnel Analysis</h5>
                       <div className="h-[250px]">
                         <Chart 
                           type="bar" 
@@ -664,7 +668,7 @@
 
                     {/* Gender Analysis Chart */}
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-dark mb-4">Gender-wise Distribution</h5>
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-orange mb-4">Gender-wise Distribution</h5>
                       <div className="h-[250px]">
                         {(() => {
                           const genders = Array.from(new Set(data.filter(d => d.college === reportCollege).map(d => d.gender || 'N/A')));
@@ -692,7 +696,7 @@
 
                     {/* Trade Analysis Chart */}
                     <div className="md:col-span-2 bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-dark mb-4">Trade-wise Registration vs Completion</h5>
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-4">Trade-wise Registration vs Completion</h5>
                       <div className="h-[350px]">
                         {(() => {
                           const trades = Array.from(new Set(data.filter(d => d.college === reportCollege).map(d => d.trade || 'N/A'))).slice(0, 10);
@@ -1004,18 +1008,46 @@
 
       return (
         <div className="min-h-screen flex flex-col">
-          <header className="bg-gradient-to-br from-brand-dark via-[#353535] to-brand-dark text-white py-14 lg:py-24 px-6 lg:px-8 text-center border-b-[8px] border-brand-green relative flex flex-col items-center justify-center overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-brand-green/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-[100px] pointer-events-none"></div>
+          <header className="bg-white text-brand-dark py-12 lg:py-20 px-6 lg:px-8 text-center border-b-[8px] border-brand-green relative flex flex-col items-center justify-center overflow-hidden shadow-sm">
+            {/* Background Decorative Elements */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-brand-green/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[100px] pointer-events-none"></div>
             <div className="absolute bottom-0 left-0 w-80 h-80 bg-brand-orange/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-[100px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 w-[120%] h-40 bg-brand-green-pale/10 -translate-x-1/2 -translate-y-1/2 -rotate-12 blur-[80px] pointer-events-none"></div>
+
+            {/* ITI Logo - Top Left */}
+            <div className="absolute left-4 top-4 lg:left-12 lg:top-12 bg-white/50 p-2 rounded-2xl backdrop-blur-md shadow-sm border border-brand-green/10 transition-transform hover:scale-105 z-20">
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Directorate_General_of_Employment_and_Training_%28DGET%29_India.png/240px-Directorate_General_of_Employment_and_Training_%28DGET%29_India.png" 
+                alt="ITI Logo" 
+                className="h-10 lg:h-20 w-auto object-contain"
+                referrerPolicy="no-referrer"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+            
+            {/* Medha Logo - Top Right */}
+            <div className="absolute right-4 top-4 lg:right-12 lg:top-12 bg-white/50 p-2 rounded-2xl backdrop-blur-md shadow-sm border border-brand-orange/10 transition-transform hover:scale-105 z-20">
+              <img 
+                src="https://www.medha.org.in/wp-content/uploads/2021/04/Medha-Logo-01.png" 
+                alt="Medha Logo" 
+                className="h-10 lg:h-20 w-auto object-contain"
+                referrerPolicy="no-referrer"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
             
             <div className="max-w-4xl mx-auto relative z-10 flex flex-col items-center">
-              <div className="inline-flex items-center gap-2 bg-brand-green/20 border border-brand-green/30 px-3 py-1 rounded-full mb-6">
-                <span className="w-1.5 h-1.5 bg-brand-green rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-green-light">Live Platform Active</span>
+              <div className="inline-flex items-center gap-2 bg-brand-green/10 border border-brand-green/20 px-4 py-1.5 rounded-full mb-6">
+                <span className="w-2 h-2 bg-brand-green rounded-full animate-pulse shadow-[0_0_8px_#31B89D]"></span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-green">Real-time Platform</span>
               </div>
-              <h1 className="text-5xl lg:text-8xl font-black tracking-tighter uppercase mb-6 leading-none text-white drop-shadow-2xl">AI Progress <span className="text-brand-green">Dashboard</span></h1>
-              <div className="h-1.5 w-24 bg-brand-orange rounded-full mb-6"></div>
-              <p className="text-xs lg:text-lg font-bold tracking-[0.5em] text-brand-green-pale uppercase opacity-80">Skill Tracking & Analytics Blueprint</p>
+              <h1 className="text-5xl lg:text-8xl font-black tracking-tighter uppercase mb-6 leading-none text-brand-dark">
+                AI Progress <span className="text-brand-orange relative">Dashboard
+                  <span className="absolute -bottom-2 left-0 w-full h-3 bg-brand-orange-pale -rotate-1 -z-10 rounded"></span>
+                </span>
+              </h1>
+              <div className="h-1.5 w-32 bg-brand-green rounded-full mb-6 shadow-sm"></div>
+              <p className="text-xs lg:text-xl font-bold tracking-[0.4em] text-slate-500 uppercase">Skill Tracking & Performance Blueprint</p>
             </div>
           </header>
 
