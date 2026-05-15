@@ -864,81 +864,73 @@
 
         // 2. Try External CSV (GitHub/Public Link)
         if (GOOGLE_SHEET_CSV_URL) {
-          console.log("Sync Action: Initializing via CSV Fetch...");
-          try {
-            const fetchUrl = GOOGLE_SHEET_CSV_URL + (GOOGLE_SHEET_CSV_URL.includes('?') ? '&' : '?') + 'cache=' + Date.now();
-            const response = await fetch(fetchUrl);
-            const csvText = await response.text();
-            
-            Papa.parse(csvText, {
-              header: true,
-              dynamicTyping: true,
-              skipEmptyLines: true,
-              complete: (results) => {
-                if (results.data && results.data.length > 0) {
-                  const processed = results.data.map((row, index) => {
-                    let obj = {};
-                    Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
+          console.log("Sync Action: Initializing via CSV Download...");
+          const cleanUrl = GOOGLE_SHEET_CSV_URL.trim();
+          
+          Papa.parse(cleanUrl, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.data && results.data.length > 0) {
+                const processed = results.data.map((row, index) => {
+                  let obj = {};
+                  Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
 
-                    // Map Logic
-                    const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
-                    const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
-                    const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+                  // Map Logic
+                  const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
+                  const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
+                  const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
 
-                    let completedValue = 0;
-                    const compKey = Object.keys(obj).find(k => 
-                      (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
-                    );
-                    if (compKey) {
-                      let rawVal = obj[compKey];
-                      if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
-                      completedValue = parseFloat(rawVal) || 0;
-                    }
+                  let completedValue = 0;
+                  const compKey = Object.keys(obj).find(k => 
+                    (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
+                  );
+                  if (compKey) {
+                    let rawVal = obj[compKey];
+                    if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
+                    completedValue = parseFloat(rawVal) || 0;
+                  }
 
-                    const statusStr = String(obj.status || '').toLowerCase();
-                    const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
+                  const statusStr = String(obj.status || '').toLowerCase();
+                  const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
 
-                    return {
-                      id: index + 1,
-                      firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
-                      lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
-                      email: obj.email || obj.emailid || '',
-                      college: collegeName || 'Unknown ITI',
-                      division: divisionName,
-                      district: obj.district || obj.homedistrict || '',
-                      trade: obj.trade || obj.tradename || obj.subject || '',
-                      status: finalized ? 'Completed' : 'In Progress',
-                      gender: obj.gender || obj.sex || 'Not Specified',
-                      category: obj.category || obj.socialcategory || 'General',
-                      incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-                      startedAt: obj.startedat || obj.registrationdate || '',
-                      completedAt: obj.completedat || obj.completiondate || '',
-                      completedPercent: finalized ? 100 : completedValue
-                    };
-                  });
-                  setData(processed);
-                  setLastSync(new Date());
-                  setIsLive(true);
-                } else {
-                  console.warn("Sync Notice: No records found in CSV, using demo data.");
-                  setData(mockData);
-                  setIsLive(false);
-                }
-                setLoading(false);
-              },
-              error: (err) => {
-                console.error("Sync Failure (Parsing):", err);
+                  return {
+                    id: index + 1,
+                    firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
+                    lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
+                    email: obj.email || obj.emailid || '',
+                    college: collegeName || 'Unknown ITI',
+                    division: divisionName,
+                    district: obj.district || obj.homedistrict || '',
+                    trade: obj.trade || obj.tradename || obj.subject || '',
+                    status: finalized ? 'Completed' : 'In Progress',
+                    gender: obj.gender || obj.sex || 'Not Specified',
+                    category: obj.category || obj.socialcategory || 'General',
+                    incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
+                    startedAt: obj.startedat || obj.registrationdate || '',
+                    completedAt: obj.completedat || obj.completiondate || '',
+                    completedPercent: finalized ? 100 : completedValue
+                  };
+                });
+                setData(processed);
+                setLastSync(new Date());
+                setIsLive(true);
+              } else {
+                console.warn("Sync Notice: No records found in CSV, using demo data.");
                 setData(mockData);
-                setLoading(false);
                 setIsLive(false);
               }
-            });
-          } catch (fetchErr) {
-            console.error("Sync Failure (Network):", fetchErr);
-            setData(mockData);
-            setLoading(false);
-            setIsLive(false);
-          }
+              setLoading(false);
+            },
+            error: (err) => {
+              console.error("Sync Failure (Download/Parse):", err);
+              setData(mockData);
+              setLoading(false);
+              setIsLive(false);
+            }
+          });
           return;
         }
 
