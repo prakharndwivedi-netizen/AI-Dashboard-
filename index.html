@@ -276,6 +276,20 @@
         .sort((a, b) => b.newRegs - a.newRegs);
     };
 
+    const maskEmail = (email) => {
+      if (!email || !email.includes('@')) return email;
+      try {
+        const [username, domain] = email.split('@');
+        if (username.length <= 2) return email;
+        const first = username[0];
+        const last = username[username.length - 1];
+        const maskedContent = "*".repeat(username.length - 2);
+        return `${first}${maskedContent}${last}@${domain}`;
+      } catch (e) {
+        return email;
+      }
+    };
+
     const GOALS_MOCK = [
       { institution: "ITI Narkatiyaganj", totalAdmissions: 200, registered: 180, totalCompleted: 150 },
       { institution: "ITI Jhanjharpur", totalAdmissions: 150, registered: 140, totalCompleted: 110 },
@@ -845,7 +859,7 @@
                     <td className="px-8 py-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-[13px] group-hover:text-brand-green transition-colors">{s.firstName} {s.lastName}</span>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{s.email || 'NO EMAIL STORED'}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{s.email ? maskEmail(s.email) : 'NO EMAIL STORED'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-4 font-bold text-slate-500">{s.college}</td>
