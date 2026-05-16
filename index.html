@@ -374,7 +374,7 @@
       const incomeDistribution = useMemo(() => getDistribution(filteredData, 'incomeLevel'), [filteredData]);
       const categoryDistribution = useMemo(() => getDistribution(filteredData, 'category'), [filteredData]);
 
-      const CHART_COLORS = ['#31B89D', '#FF9700', '#4FD3A8', '#FFB900', '#B2FFE0', '#FCE7B3', '#12314C'];
+      const CHART_COLORS = ['#31B89D', '#FF9700', '#12314C', '#FFB900', '#4FD3A8', '#FCE7B3'];
 
       const commonOptions = {
         chart: { toolbar: { show: false }, zoom: { enabled: false } },
@@ -845,32 +845,42 @@
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <table className="w-full text-left">
-              <thead className="bg-[#effefb] text-brand-green text-[10px] font-black uppercase tracking-[0.15em] border-b border-brand-green/20">
+              <thead className="bg-[#12314C] text-white text-[10px] font-black uppercase tracking-[0.18em] border-b border-brand-green/20">
                 <tr>
-                  <th className="px-8 py-5">Student Identity</th>
-                  <th className="px-8 py-5">Educational Institution</th>
-                  <th className="px-8 py-5 text-center">Outcome State</th>
-                  <th className="px-8 py-5">Skill Domain</th>
+                  <th className="px-8 py-6">Student Identity</th>
+                  <th className="px-8 py-6">Educational Institution</th>
+                  <th className="px-8 py-6 text-center">Outcome State</th>
+                  <th className="px-8 py-6">Skill Domain</th>
                 </tr>
               </thead>
               <tbody className="text-xs text-brand-dark">
                 {filtered.map((s, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-brand-green/5 transition-colors group">
-                    <td className="px-8 py-4">
+                  <tr key={i} className="border-b border-slate-100 hover:bg-brand-green/[0.03] transition-colors group">
+                    <td className="px-8 py-5">
                       <div className="flex flex-col">
-                        <span className="font-bold text-[13px] group-hover:text-brand-green transition-colors">{s.firstName} {s.lastName}</span>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{s.email ? maskEmail(s.email) : 'NO EMAIL STORED'}</span>
+                        <span className="font-bold text-[14px] group-hover:text-brand-green transition-colors">{s.firstName} {s.lastName}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{s.email ? maskEmail(s.email) : 'NO EMAIL STORED'}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-4 font-bold text-slate-500">{s.college}</td>
-                    <td className="px-8 py-4">
+                    <td className="px-8 py-5">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-600">{s.college}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{s.division} Division</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
                       <div className="flex justify-center">
-                        <span className={`px-3 py-1.5 rounded-lg font-black uppercase text-[9px] tracking-widest shadow-sm ${s.status === 'Completed' ? 'bg-brand-green/10 text-brand-green border border-brand-green/20' : 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20'}`}>
+                        <span className={`px-4 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-sm ${s.status === 'Completed' ? 'bg-brand-green text-white' : 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20'}`}>
                           {s.status}
                         </span>
                       </div>
                     </td>
-                    <td className="px-8 py-4 font-bold uppercase tracking-wider text-[10px] text-slate-600">{s.trade}</td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-brand-green"></div>
+                        <span className="font-black uppercase tracking-wider text-[11px] text-slate-700">{s.trade}</span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -889,42 +899,26 @@
       const [isLive, setIsLive] = useState(false);
 
       const fetchData = async () => {
-        const mockData = [
-          { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-          { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: new Date().toISOString() },
-          { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-          { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-        ];
+      // Mock data remains as fallback
+      const mockData = [
+        { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+        { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: new Date().toISOString() },
+        { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+        { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+      ];
 
-        const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 
-        // 1. Try Google Apps Script Native 
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-           console.log("Sync Action: Initializing via GAS native...");
-           google.script.run
-            .withSuccessHandler((result) => {
-              setData(result && result.length > 0 ? result : mockData);
-              setLoading(false);
-              setLastSync(new Date());
-              setIsLive(true);
-            })
-            .withFailureHandler((err) => {
-              console.error("Sync Failure (GAS):", err);
-              setData(mockData);
-              setLoading(false);
-              setIsLive(false);
-            })
-            .getSpreadsheetData();
-          return;
-        }
-
-        // 2. Try External CSV (GitHub/Public Link)
-        if (GOOGLE_SHEET_CSV_URL) {
-          console.log("Sync Action: Initializing via CSV Download...");
-          const cleanUrl = GOOGLE_SHEET_CSV_URL.trim();
-          
-          Papa.parse(cleanUrl, {
-            download: true,
+      // 1. Try External CSV (GitHub/Public Link) with Cache-Busting
+      if (GOOGLE_SHEET_CSV_URL) {
+        console.log("Sync Action: Initializing via CSV Download...");
+        
+        // Add cache-buster to URL to ensure fresh data from GitHub/Servers
+        const cacheBuster = `&cb=${Date.now()}`;
+        const cleanUrl = GOOGLE_SHEET_CSV_URL.trim() + cacheBuster;
+        
+        Papa.parse(cleanUrl, {
+          download: true,
             header: true,
             dynamicTyping: true,
             skipEmptyLines: true,
