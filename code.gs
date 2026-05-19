@@ -77,7 +77,7 @@ function getSpreadsheetData() {
         firstName: obj.firstname || obj.studentname?.split(' ')[0] || String(row[0] || ''),
         lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || String(row[1] || ''),
         email: obj.email || obj.emailid || '',
-        phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
+        phone: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
         college: collegeName || 'Unknown ITI',
         division: divisionName,
         district: obj.district || obj.homedistrict || '',
