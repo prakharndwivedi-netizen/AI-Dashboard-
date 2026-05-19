@@ -276,19 +276,33 @@
         .sort((a, b) => b.newRegs - a.newRegs);
     };
 
-    const maskEmail = (email) => {
-      if (!email || !email.includes('@')) return email;
-      try {
-        const [username, domain] = email.split('@');
-        if (username.length <= 2) return email;
-        const first = username[0];
-        const last = username[username.length - 1];
-        const maskedContent = "*".repeat(username.length - 2);
-        return `${first}${maskedContent}${last}@${domain}`;
-      } catch (e) {
-        return email;
+    const maskSensitive = (val) => {
+      if (!val) return val;
+      const str = String(val).trim();
+      if (str.includes('@')) {
+        // Email masking
+        try {
+          const [username, domain] = str.split('@');
+          if (username.length <= 2) return str;
+          const first = username[0];
+          const last = username[username.length - 1];
+          const maskedContent = "*".repeat(username.length - 2);
+          return `${first}${maskedContent}${last}@${domain}`;
+        } catch (e) {
+          return str;
+        }
+      } else {
+        // Phone masking (assuming numeric-like)
+        const digits = str.replace(/\D/g, '');
+        if (digits.length < 5) return str; // Too short to mask meaningfully
+        const first = str[0];
+        const last = str[str.length - 1];
+        const maskedContent = "*".repeat(str.length - 2);
+        return `${first}${maskedContent}${last}`;
       }
     };
+
+    const maskEmail = maskSensitive; // Alias for backward compatibility
 
     const GOALS_MOCK = [
       { institution: "ITI Narkatiyaganj", totalAdmissions: 200, registered: 180, totalCompleted: 150 },
@@ -788,16 +802,20 @@
     const StudentTable = ({ data, initialSearch = '', onSearchChange }) => {
       const [searchQuery, setSearchQuery] = useState(initialSearch);
       const [statusFilter, setStatusFilter] = useState('All');
+      const [selectedStudent, setSelectedStudent] = useState(null);
 
       useEffect(() => {
         setSearchQuery(initialSearch);
       }, [initialSearch]);
 
       const filtered = data.filter(d => {
+        const q = searchQuery.toLowerCase();
         const matchesSearch = 
-          String(d.firstName).toLowerCase().includes(searchQuery.toLowerCase()) || 
-          String(d.lastName).toLowerCase().includes(searchQuery.toLowerCase()) || 
-          String(d.college).toLowerCase().includes(searchQuery.toLowerCase());
+          String(d.firstName).toLowerCase().includes(q) || 
+          String(d.lastName).toLowerCase().includes(q) || 
+          String(d.college).toLowerCase().includes(q) ||
+          String(d.email || '').toLowerCase().includes(q) ||
+          String(d.phoneNumber || '').toLowerCase().includes(q);
         
         const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
         
@@ -806,6 +824,78 @@
 
       return (
         <div className="p-4 md:p-8 space-y-6">
+          {/* Profile Modal */}
+          {selectedStudent && (
+            <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setSelectedStudent(null)}>
+              <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+                <div className="bg-brand-green p-6 text-white flex justify-between items-center relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-12 -translate-y-12"></div>
+                  <div className="relative z-10">
+                    <h3 className="text-xl font-black uppercase tracking-tight">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">{selectedStudent.trade} Specialist</p>
+                  </div>
+                  <button onClick={() => setSelectedStudent(null)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all">
+                    <i data-lucide="x" className="w-5 h-5"></i>
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Gender</p>
+                      <p className="text-xs font-bold text-brand-dark">{selectedStudent.gender || 'N/A'}</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Category</p>
+                      <p className="text-xs font-bold text-brand-dark">{selectedStudent.category || 'N/A'}</p>
+                    </div>
+                    <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Educational Institution</p>
+                      <p className="text-xs font-bold text-brand-dark">{selectedStudent.college}</p>
+                    </div>
+                    <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Trade/Skill Domain</p>
+                      <p className="text-xs font-bold text-brand-dark">{selectedStudent.trade}</p>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border-2 flex items-center justify-between ${selectedStudent.status === 'Completed' ? 'bg-brand-green/5 border-brand-green/20' : 'bg-brand-orange/5 border-brand-orange/20'}`}>
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Status</p>
+                      <h4 className={`text-lg font-black uppercase ${selectedStudent.status === 'Completed' ? 'text-brand-green' : 'text-brand-orange'}`}>{selectedStudent.status}</h4>
+                    </div>
+                    {selectedStudent.status === 'Completed' && (
+                      <div className="text-right">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Finalized On</p>
+                        <p className="text-[10px] font-bold text-brand-dark">{selectedStudent.completedAt ? new Date(selectedStudent.completedAt).toLocaleDateString() : 'Dec 2023'}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2">
+                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">Contact Details (Secured)</p>
+                     <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-[10px]">
+                           <i data-lucide="mail" className="w-3 h-3 text-slate-400"></i>
+                           <span className="font-mono text-slate-600">{maskSensitive(selectedStudent.email)}</span>
+                        </div>
+                        {selectedStudent.phoneNumber && (
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <i data-lucide="phone" className="w-3 h-3 text-slate-400"></i>
+                            <span className="font-mono text-slate-600">{maskSensitive(selectedStudent.phoneNumber)}</span>
+                          </div>
+                        )}
+                     </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-slate-50 border-t border-slate-100">
+                  <button onClick={() => setSelectedStudent(null)} className="w-full py-3 bg-brand-dark text-white font-black uppercase text-[10px] rounded-xl tracking-widest hover:bg-black transition-colors shadow-lg">Close Profile</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm gap-4 transition-all hover:border-brand-green/30">
             <h2 className="text-xl font-black uppercase tracking-tighter text-brand-dark flex items-center gap-3">
               <span className="w-2 h-8 bg-brand-green rounded-full"></span>
@@ -855,11 +945,16 @@
               </thead>
               <tbody className="text-xs text-brand-dark">
                 {filtered.map((s, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-brand-green/[0.03] transition-colors group">
+                  <tr key={i} className="border-b border-slate-100 hover:bg-brand-green/[0.03] transition-colors group cursor-pointer" onClick={() => setSelectedStudent(s)}>
                     <td className="px-8 py-5">
                       <div className="flex flex-col">
                         <span className="font-bold text-[14px] group-hover:text-brand-green transition-colors">{s.firstName} {s.lastName}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{s.email ? maskEmail(s.email) : 'NO EMAIL STORED'}</span>
+                        <div className="flex gap-3 mt-0.5">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{s.email ? maskSensitive(s.email) : 'NO EMAIL'}</span>
+                          {s.phoneNumber && (
+                            <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{maskSensitive(s.phoneNumber)}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-8 py-5">
@@ -898,19 +993,41 @@
       const [lastSync, setLastSync] = useState(null);
       const [isLive, setIsLive] = useState(false);
 
+      const mockData = useMemo(() => [
+        { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
+        { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: "2023-11-15", phoneNumber: "9876543211", email: "anjali.k@example.com" },
+        { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: "2023-11-10", completedAt: "2023-12-10", phoneNumber: "9876543212", email: "suresh.p@example.com" },
+        { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: "2023-11-05", completedAt: "2023-12-15", phoneNumber: "9876543213", email: "p.devi@example.com" },
+      ], []);
+
       const fetchData = async () => {
-      // Mock data remains as fallback
-      const mockData = [
-        { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-        { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: new Date().toISOString() },
-        { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-        { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: new Date().toISOString(), completedAt: new Date().toISOString() },
-      ];
+        const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 
-      const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+        // 1. Try Google Apps Script Native Sync (if deployed as Web App)
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+           console.log("Sync Action: Initializing via GAS native...");
+           google.script.run
+            .withSuccessHandler((result) => {
+              setData(result && result.length > 0 ? result : mockData);
+              setLoading(false);
+              setLastSync(new Date());
+              setIsLive(true);
+            })
+            .withFailureHandler((err) => {
+              console.error("Sync Failure (GAS):", err);
+              // Failover to CSV or Mock
+              if (!GOOGLE_SHEET_CSV_URL) {
+                setData(mockData);
+                setLoading(false);
+              }
+            })
+            .getSpreadsheetData();
+          
+          if (!GOOGLE_SHEET_CSV_URL) return; // Only stop if no CSV fallback
+        }
 
-      // 1. Try External CSV (GitHub/Public Link) with Cache-Busting
-      if (GOOGLE_SHEET_CSV_URL) {
+        // 2. Try External CSV (GitHub/Public Link) with Cache-Busting
+        if (GOOGLE_SHEET_CSV_URL) {
         console.log("Sync Action: Initializing via CSV Download...");
         
         // Add cache-buster to URL to ensure fresh data from GitHub/Servers
@@ -951,6 +1068,7 @@
                     firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
                     lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
                     email: obj.email || obj.emailid || '',
+                    phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
                     college: collegeName || 'Unknown ITI',
                     division: divisionName,
                     district: obj.district || obj.homedistrict || '',
