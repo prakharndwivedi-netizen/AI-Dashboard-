@@ -1300,83 +1300,101 @@
             </div>
           </header>
 
-          <div className="lg:hidden flex bg-white border-b border-slate-200">
-            <button onClick={() => setActiveTab('overview')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'overview' ? 'text-brand border-b-2 border-brand' : 'text-slate-400'}`}>
-              <i data-lucide="layout-dashboard" className="w-3 h-3"></i> Overview
-            </button>
-            <button onClick={() => setActiveTab('students')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'students' ? 'text-brand border-b-2 border-brand' : 'text-slate-400'}`}>
-              <i data-lucide="users" className="w-3 h-3"></i> Registry
-            </button>
+          <div className="lg:hidden flex flex-col bg-white border-b border-slate-200">
+            <div className="flex border-b border-slate-100">
+              <button onClick={() => setActiveTab('overview')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'overview' ? 'text-brand border-b-2 border-brand font-black' : 'text-slate-400'}`}>
+                <i data-lucide="layout-dashboard" className="w-3 h-3"></i> Overview
+              </button>
+              <button onClick={() => setActiveTab('students')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'students' ? 'text-brand border-b-2 border-brand font-black' : 'text-slate-400'}`}>
+                <i data-lucide="users" className="w-3 h-3"></i> Registry
+              </button>
+            </div>
+            <div className="flex overflow-x-auto no-scrollbar bg-slate-50 p-2 gap-2">
+              <a href="https://pehel.medha.org.in/systemAdoption" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <i data-lucide="user-plus" className="w-3 h-3"></i> Register
+              </a>
+              <a href="https://learn.medha.org.in/users/sign_in" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <i data-lucide="log-in" className="w-3 h-3"></i> Login
+              </a>
+              <a href="https://learn.medha.org.in/users/password/new" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <i data-lucide="key" className="w-3 h-3"></i> Reset
+              </a>
+              <a href="https://youtube.com/@prakhardwivedi-e7y?si=bnYGchmYq4rMEx-a" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <i data-lucide="play-circle" className="w-3 h-3"></i> Tutorials
+              </a>
+            </div>
           </div>
 
-          <div className="flex flex-1">
-            <aside className="w-64 border-r border-slate-200 bg-white hidden lg:flex flex-col p-6 space-y-6">
-              <nav className="space-y-2">
-                <button 
-                  onClick={() => setActiveTab('overview')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'overview' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
-                >
-                  <i data-lucide="layout-dashboard" className="w-4 h-4"></i> Overview
-                </button>
-                <button 
-                  onClick={() => setActiveTab('students')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'students' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
-                >
-                  <i data-lucide="users" className="w-4 h-4"></i> Registry
-                </button>
-              </nav>
+          <div className="flex flex-1 overflow-hidden">
+            <aside className="w-64 border-r border-slate-200 bg-white hidden lg:flex flex-col p-6 space-y-6 overflow-y-auto no-scrollbar">
+              <div className="space-y-6">
+                <nav className="space-y-2">
+                  <button 
+                    onClick={() => setActiveTab('overview')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'overview' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <i data-lucide="layout-dashboard" className="w-4 h-4"></i> Overview
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('students')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'students' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <i data-lucide="users" className="w-4 h-4"></i> Registry
+                  </button>
+                </nav>
 
-              <div className="mt-auto pt-6 border-t border-slate-100">
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
-                  <div className="mb-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Course Hub</p>
-                    <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
-                  </div>
-                  <div className="space-y-1">
-                    <a 
-                      href="https://pehel.medha.org.in/systemAdoption" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
-                        <i data-lucide="user-plus" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
-                      </div>
-                      New Registration
-                    </a>
-                    <a 
-                      href="https://learn.medha.org.in/users/sign_in" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
-                        <i data-lucide="log-in" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
-                      </div>
-                      Sign In
-                    </a>
-                    <a 
-                      href="https://learn.medha.org.in/users/password/new" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
-                        <i data-lucide="key" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
-                      </div>
-                      Reset Password
-                    </a>
-                    <a 
-                      href="https://youtube.com/@prakhardwivedi-e7y?si=bnYGchmYq4rMEx-a" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
-                        <i data-lucide="play-circle" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
-                      </div>
-                      Tutorial Videos
-                    </a>
+                <div className="pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Course Hub</p>
+                      <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
+                    </div>
+                    <div className="space-y-1">
+                      <a 
+                        href="https://pehel.medha.org.in/systemAdoption" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <i data-lucide="user-plus" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
+                        </div>
+                        Registration
+                      </a>
+                      <a 
+                        href="https://learn.medha.org.in/users/sign_in" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <i data-lucide="log-in" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
+                        </div>
+                        Sign In
+                      </a>
+                      <a 
+                        href="https://learn.medha.org.in/users/password/new" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <i data-lucide="key" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
+                        </div>
+                        Reset
+                      </a>
+                      <a 
+                        href="https://youtube.com/@prakhardwivedi-e7y?si=bnYGchmYq4rMEx-a" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <i data-lucide="play-circle" className="w-4 h-4 text-slate-400 group-hover:text-brand"></i>
+                        </div>
+                        Tutorials
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
