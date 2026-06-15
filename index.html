@@ -1475,6 +1475,21 @@
         });
       }, [data, searchQuery, safeStatusFilter, safeProgressFilter, safeDivisionFilter, safeCollegeFilter]);
 
+      const registryStats = useMemo(() => {
+        let completed = 0;
+        let inProgress = 0;
+        filtered.forEach(student => {
+          if (student.status === 'Completed') {
+            completed++;
+          } else if (student.status === 'In Progress') {
+            inProgress++;
+          }
+        });
+        const total = filtered.length;
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return { total, completed, inProgress, completionRate };
+      }, [filtered]);
+
       // Calculate paginated slices
       const totalItems = filtered.length;
       const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -1547,110 +1562,111 @@
         <div className="p-4 md:p-8 space-y-6">
           {/* Enhanced Profile Modal */}
           {selectedStudent && (
-            <div className="fixed inset-0 bg-brand-dark/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
-              <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in slide-in-from-bottom-8 duration-300 border border-white/20" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-brand-dark/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-4" onClick={() => setSelectedStudent(null)}>
+              <div className="bg-white w-full max-w-md rounded-[1.75rem] shadow-2xl flex flex-col max-h-[90vh] md:max-h-[640px] animate-in fade-in zoom-in-95 duration-200 border border-slate-100 overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Profile Header */}
-                <div className="bg-brand-dark p-8 text-white relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/20 rounded-full translate-x-24 -translate-y-24 blur-3xl"></div>
-                  <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-orange/10 rounded-full -translate-x-12 translate-y-12 blur-2xl"></div>
+                <div className="bg-brand-dark px-6 py-5 text-white relative overflow-hidden shrink-0">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-brand-green/20 rounded-full translate-x-16 -translate-y-16 blur-2xl"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-brand-orange/10 rounded-full -translate-x-8 translate-y-8 blur-xl"></div>
                   
-                  <div className="relative z-10 flex items-end gap-6">
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-xl border-2 border-white/20">
-                      <span className="text-3xl font-black">{selectedStudent.firstName ? selectedStudent.firstName[0] : 'S'}{selectedStudent.lastName ? selectedStudent.lastName[0] : ''}</span>
+                  <div className="relative z-10 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-md border border-white/20 shrink-0">
+                      <span className="text-xl font-black">{selectedStudent.firstName ? selectedStudent.firstName[0] : 'S'}{selectedStudent.lastName ? selectedStudent.lastName[0] : ''}</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="inline-flex items-center gap-2 px-2 py-0.5 rounded bg-brand-green/20 border border-brand-green/30 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-brand-green/20 border border-brand-green/30 mb-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></div>
-                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-brand-green">Active Candidate</span>
+                        <span className="text-[7px] font-black uppercase tracking-[0.15em] text-brand-green">Active Candidate</span>
                       </div>
-                      <h3 className="text-2xl font-black uppercase tracking-tight leading-none">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
-                      <p className="text-white/50 text-[10px] font-black uppercase tracking-[.25em] mt-2">{selectedStudent.trade}</p>
+                      <h3 className="text-lg font-black uppercase tracking-tight leading-none truncate">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
+                      <p className="text-white/50 text-[9px] font-black uppercase tracking-[0.2em] mt-1 truncate">{selectedStudent.trade}</p>
                     </div>
-                    <button onClick={() => setSelectedStudent(null)} className="absolute top-0 right-0 w-10 h-10 flex items-center justify-center hover:bg-white/10 transition-all rounded-full m-4">
-                      <LucideIcon name="x" className="w-5 h-5" />
+                    <button onClick={() => setSelectedStudent(null)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 hover:text-red-400 transition-all rounded-full shrink-0">
+                      <LucideIcon name="x" className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
                 
-                {/* Profile Body */}
-                <div className="p-8 space-y-8 bg-brand-bg/30">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:border-brand-green/30">
-                      <div className="flex items-center gap-2 mb-2">
+                {/* Profile Body - Scrollable content wrapper */}
+                <div className="p-5 space-y-4 bg-slate-50/50 overflow-y-auto flex-1 scrollbar-thin">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="group bg-white p-3.5 rounded-xl border border-slate-200 transition-all hover:border-brand-green/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
                         <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-green/10 transition-colors">
                           <LucideIcon name="user" className="w-3 h-3 text-slate-400 group-hover:text-brand-green" />
                         </div>
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Demographics</span>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Demographics</span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-0.5">
                         <p className="text-xs font-black text-brand-dark uppercase tracking-tight">{selectedStudent.gender || 'N/A'}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">{selectedStudent.category || 'General'} Category</p>
+                        <p className="text-[8.5px] font-bold text-slate-400 uppercase">{selectedStudent.category || 'General'} Category</p>
                       </div>
                     </div>
 
-                    <div className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:border-brand-orange/30">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="group bg-white p-3.5 rounded-xl border border-slate-200 transition-all hover:border-brand-orange/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
                         <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-orange/10 transition-colors">
                           <LucideIcon name="book-open" className="w-3 h-3 text-slate-400 group-hover:text-brand-orange" />
                         </div>
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Academic Info</span>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Academic Info</span>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-black text-brand-dark uppercase tracking-tight">{selectedStudent.trade}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">Skill Domain</p>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-black text-brand-dark uppercase tracking-tight truncate">{selectedStudent.trade}</p>
+                        <p className="text-[8.5px] font-bold text-slate-400 uppercase">Skill Domain</p>
                       </div>
                     </div>
 
-                    <div className="col-span-2 group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:border-brand-green/30">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="col-span-2 group bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm transition-all hover:border-brand-green/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
                         <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-green/10 transition-colors">
                           <LucideIcon name="map-pin" className="w-3 h-3 text-slate-400 group-hover:text-brand-green" />
                         </div>
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Institution</span>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Institution</span>
                       </div>
-                      <p className="text-xs font-black text-brand-dark uppercase tracking-tight">{selectedStudent.college}</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{selectedStudent.division} Division</p>
+                      <p className="text-xs font-black text-brand-dark uppercase tracking-tight break-words">{selectedStudent.college}</p>
+                      <p className="text-[8.5px] font-bold text-slate-400 uppercase mt-0.5">{selectedStudent.division} Division</p>
                     </div>
                   </div>
 
-                  <div className={`p-6 rounded-[1.5rem] border-2 flex items-center justify-between transition-all ${selectedStudent.status === 'Completed' ? 'bg-brand-green/5 border-brand-green/20' : 'bg-brand-orange/5 border-brand-orange/20 shadow-lg shadow-brand-orange/10'}`}>
+                  <div className={`p-4 rounded-xl border flex items-center justify-between transition-all ${selectedStudent.status === 'Completed' ? 'bg-brand-green/5 border-brand-green/20' : 'bg-brand-orange/5 border-brand-orange/20'}`}>
                     <div>
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Current State</span>
-                      <h4 className={`text-xl font-black uppercase tracking-tighter ${selectedStudent.status === 'Completed' ? 'text-brand-green' : 'text-brand-orange'}`}>{selectedStudent.status}</h4>
+                      <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Current State</span>
+                      <h4 className={`text-lg font-black uppercase tracking-tighter ${selectedStudent.status === 'Completed' ? 'text-brand-green' : 'text-brand-orange'}`}>{selectedStudent.status}</h4>
                     </div>
                     {selectedStudent.status === 'Completed' && (
                       <div className="text-right">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Finalized Date</span>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Finalized Date</span>
                         <p className="text-xs font-black text-brand-dark uppercase tracking-tighter">{selectedStudent.completedAt ? new Date(selectedStudent.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '05 DEC 2023'}</p>
                       </div>
                     )}
                   </div>
 
-                  <div className="bg-brand-dark p-6 rounded-2xl shadow-xl">
-                     <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-4">Secured Contact Registry</p>
-                     <div className="grid grid-cols-1 gap-4">
-                        <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10 group cursor-help">
-                           <div className="flex items-center gap-3">
-                              <LucideIcon name="mail" className="w-4 h-4 text-brand-green" />
-                              <span className="text-xs font-mono text-white/80">{maskSensitive(selectedStudent.email)}</span>
+                  <div className="bg-brand-dark p-4 rounded-xl shadow-md">
+                     <p className="text-[7.5px] font-black text-white/40 uppercase tracking-widest mb-3">Secured Contact Registry</p>
+                     <div className="grid grid-cols-1 gap-2">
+                        <div className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg border border-white/10 group cursor-help text-xs">
+                           <div className="flex items-center gap-2">
+                              <LucideIcon name="mail" className="w-3.5 h-3.5 text-brand-green shrink-0" />
+                              <span className="font-mono text-white/80 select-all">{maskSensitive(selectedStudent.email)}</span>
                            </div>
-                           <span className="text-[7px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
+                           <span className="text-[6.5px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
                         </div>
                         {selectedStudent.phoneNumber && (
-                          <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10 group cursor-help">
-                            <div className="flex items-center gap-3">
-                              <LucideIcon name="phone" className="w-4 h-4 text-brand-orange" />
-                              <span className="text-xs font-mono text-white/80">{maskSensitive(selectedStudent.phoneNumber)}</span>
+                          <div className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg border border-white/10 group cursor-help text-xs">
+                            <div className="flex items-center gap-2">
+                              <LucideIcon name="phone" className="w-3.5 h-3.5 text-brand-orange shrink-0" />
+                              <span className="font-mono text-white/80 select-all">{maskSensitive(selectedStudent.phoneNumber)}</span>
                             </div>
-                            <span className="text-[7px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
+                            <span className="text-[6.5px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
                           </div>
                         )}
                      </div>
                   </div>
                 </div>
 
-                <div className="p-8 bg-white border-t border-slate-100">
-                  <button onClick={() => setSelectedStudent(null)} className="w-full py-4 bg-brand-dark text-white font-black uppercase text-xs rounded-2xl tracking-[0.2em] hover:bg-black transition-all shadow-xl hover:-translate-y-1 active:scale-95">Return to Registry</button>
+                {/* Profile Footer */}
+                <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                  <button onClick={() => setSelectedStudent(null)} className="w-full py-3 bg-brand-dark text-white font-black uppercase text-xs rounded-xl tracking-[0.15em] hover:bg-black transition-all shadow-md active:scale-95">Return to Registry</button>
                 </div>
               </div>
             </div>
@@ -1741,6 +1757,63 @@
                       ×
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Cohort Summary Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Filtered Cohort */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-slate-300">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                <LucideIcon name="users" className="w-5 h-5 text-slate-500" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Filtered Cohort</span>
+                <span className="text-xl font-black text-brand-dark leading-none">{registryStats.total}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Students Selected</span>
+              </div>
+            </div>
+
+            {/* Completed */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-brand-green/30">
+              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center shrink-0">
+                <LucideIcon name="award" className="w-5 h-5 text-brand-green" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-brand-green block">Overall Completed</span>
+                <span className="text-xl font-black text-brand-green leading-none">{registryStats.completed}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Finalized Records</span>
+              </div>
+            </div>
+
+            {/* In Progress */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-brand-orange/30">
+              <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center shrink-0">
+                <LucideIcon name="hourglass" className="w-5 h-5 text-brand-orange" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-brand-orange block">In Progress</span>
+                <span className="text-xl font-black text-brand-orange leading-none">{registryStats.inProgress}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Ongoing Journeys</span>
+              </div>
+            </div>
+
+            {/* Completion Rate */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 col-span-2 lg:col-span-1 transition-all hover:border-brand-green/30">
+              <div className="w-10 h-10 rounded-xl bg-[#12314C]/15 flex items-center justify-center shrink-0">
+                <LucideIcon name="trending-up" className="w-5 h-5 text-[#12314C]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-[#12314C] block">Completion Ratio</span>
+                <div className="flex items-baseline gap-2 leading-none">
+                  <span className="text-xl font-black text-brand-dark">{registryStats.completionRate}%</span>
+                  <span className="text-[8px] font-extrabold text-brand-green uppercase tracking-wider">Success</span>
+                </div>
+                {/* Micro progress bar */}
+                <div className="w-full bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-orange to-brand-green h-full rounded-full transition-all duration-500" style={{ width: `${registryStats.completionRate}%` }}></div>
                 </div>
               </div>
             </div>
