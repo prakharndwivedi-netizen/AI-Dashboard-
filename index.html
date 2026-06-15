@@ -1273,40 +1273,48 @@
       const [statusFilter, setStatusFilter] = useState(() => {
         try {
           const saved = localStorage.getItem('filter_status');
-          return saved ? JSON.parse(saved) : ['Completed', 'In Progress'];
-        } catch(e) {
-          return ['Completed', 'In Progress'];
-        }
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return ['Completed', 'In Progress'];
       });
 
       const [progressFilter, setProgressFilter] = useState(() => {
         try {
-          if (initialProgressFilter && initialProgressFilter !== 'All') {
-            return [initialProgressFilter];
-          }
           const saved = localStorage.getItem('filter_progress');
-          return saved ? JSON.parse(saved) : ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
-        } catch(e) {
-          return ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        if (initialProgressFilter && initialProgressFilter !== 'All') {
+          return [initialProgressFilter];
         }
+        return ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
       });
 
       const [divisionFilter, setDivisionFilter] = useState(() => {
         try {
           const saved = localStorage.getItem('filter_division');
-          return saved ? JSON.parse(saved) : [];
-        } catch(e) {
-          return [];
-        }
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
       });
 
       const [collegeFilter, setCollegeFilter] = useState(() => {
         try {
           const saved = localStorage.getItem('filter_college');
-          return saved ? JSON.parse(saved) : [];
-        } catch(e) {
-          return [];
-        }
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
       });
 
       const [selectedStudent, setSelectedStudent] = useState(null);
@@ -1331,32 +1339,6 @@
         return () => clearTimeout(timer);
       }, [displaySearch]);
 
-      useEffect(() => {
-        if (initialSearch !== displaySearch) {
-          setDisplaySearch(initialSearch);
-          setSearchQuery(initialSearch);
-          setCurrentPage(1);
-        }
-      }, [initialSearch]);
-
-      useEffect(() => {
-        if (initialProgressFilter === 'All') {
-          try {
-            const saved = localStorage.getItem('filter_progress');
-            if (saved) {
-              setProgressFilter(JSON.parse(saved));
-            } else {
-              setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
-            }
-          } catch(e) {
-            setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
-          }
-        } else if (initialProgressFilter) {
-          setProgressFilter([initialProgressFilter]);
-        }
-        setCurrentPage(1);
-      }, [initialProgressFilter]);
-
       // Persistence Sync
       useEffect(() => {
         localStorage.setItem('filter_search', searchQuery);
@@ -1372,8 +1354,6 @@
 
       useEffect(() => {
         localStorage.setItem('filter_division', JSON.stringify(divisionFilter));
-        // Reset college selection when division list changes to avoid selecting orphan colleges
-        setCollegeFilter([]);
       }, [divisionFilter]);
 
       useEffect(() => {
@@ -2252,11 +2232,23 @@
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
+                    localStorage.setItem('filter_search', college);
+                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    localStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
+                    localStorage.setItem('filter_division', JSON.stringify([]));
+                    localStorage.setItem('filter_college', JSON.stringify([]));
+                    localStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter(college);
                     setProgressRangeFilter('All');
                     setActiveTab('students');
                   }}
                   onViewProgressRegistry={(range) => {
+                    localStorage.setItem('filter_search', '');
+                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    localStorage.setItem('filter_progress', JSON.stringify([range]));
+                    localStorage.setItem('filter_division', JSON.stringify([]));
+                    localStorage.setItem('filter_college', JSON.stringify([]));
+                    localStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter('');
                     setProgressRangeFilter(range);
                     setActiveTab('students');
