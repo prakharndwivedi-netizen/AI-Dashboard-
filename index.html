@@ -1129,40 +1129,277 @@
       }
     };
 
+    const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeholder = "Select..." }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const [search, setSearch] = useState("");
+      const dropdownRef = useRef(null);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            setIsOpen(false);
+            setSearch("");
+          }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+      }, []);
+
+      useEffect(() => {
+        if (isOpen) {
+          const timer = setTimeout(() => {
+            try {
+              if (window.lucide) window.lucide.createIcons();
+            } catch (e) {}
+          }, 50);
+          return () => clearTimeout(timer);
+        }
+      }, [isOpen]);
+
+      const handleToggleOption = (val) => {
+        if (selectedValues.includes(val)) {
+          onChange(selectedValues.filter(v => v !== val));
+        } else {
+          onChange([...selectedValues, val]);
+        }
+      };
+
+      const handleSelectAll = (filteredOptions) => {
+        const newSelected = Array.from(new Set([...selectedValues, ...filteredOptions]));
+        onChange(newSelected);
+      };
+
+      const handleClear = (filteredOptions) => {
+        onChange(selectedValues.filter(v => !filteredOptions.includes(v)));
+      };
+
+      const filteredOptions = useMemo(() => {
+        return options.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
+      }, [options, search]);
+
+      const displayLabel = useMemo(() => {
+        if (selectedValues.length === 0) return "All";
+        if (selectedValues.length === options.length) return "All (" + options.length + ")";
+        if (selectedValues.length === 1) return selectedValues[0];
+        return `${selectedValues.length} Selected`;
+      }, [selectedValues, options]);
+
+      return (
+        <div className="space-y-1.5 relative w-full" ref={dropdownRef}>
+          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+          <div 
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-4 py-2.5 outline-none cursor-pointer hover:border-brand-green/35 transition-all text-brand-dark flex justify-between items-center min-h-[38px] select-none"
+          >
+            <span className="truncate max-w-[150px]">{displayLabel}</span>
+            <div className="flex items-center gap-1">
+              {selectedValues.length > 0 && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange([]);
+                  }}
+                  className="text-[8px] font-extrabold text-brand-orange hover:bg-brand-orange/10 px-1.5 py-0.5 rounded uppercase leading-none"
+                >
+                  Clear
+                </button>
+              )}
+              <i data-lucide={isOpen ? "chevron-up" : "chevron-down"} className="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+            </div>
+          </div>
+
+          {isOpen && (
+            <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 flex flex-col gap-2 max-h-72 min-w-[200px] animate-in fade-in duration-100">
+              {/* Action links */}
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-wider border-b border-slate-100 pb-1.5 shrink-0">
+                <button onClick={() => handleSelectAll(filteredOptions)} className="text-brand-green hover:underline">Select Visible</button>
+                <button onClick={() => handleClear(filteredOptions)} className="text-brand-orange hover:underline">Deselect Visible</button>
+              </div>
+              
+              {/* Search box if options are numerous */}
+              {options.length > 4 && (
+                <div className="relative shrink-0">
+                  <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    className="w-full pl-7 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold outline-none focus:bg-white focus:ring-1 focus:ring-brand-green/20 transition-all text-brand-dark"
+                  />
+                </div>
+              )}
+
+              {/* Items list */}
+              <div className="overflow-y-auto space-y-1 max-h-44 pr-1 scrollbar-thin">
+                {filteredOptions.length === 0 ? (
+                  <p className="text-[9px] font-bold text-slate-400 uppercase text-center py-2">No options found</p>
+                ) : (
+                  filteredOptions.map(opt => {
+                    const checked = selectedValues.includes(opt);
+                    return (
+                      <label 
+                        key={opt} 
+                        className="flex items-center gap-2 p-1 rounded-lg hover:bg-slate-50 cursor-pointer text-[9px] font-bold text-brand-dark uppercase truncate select-none"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={checked} 
+                          onChange={() => handleToggleOption(opt)}
+                          className="rounded border-slate-300 text-brand-green focus:ring-brand-green/35"
+                        />
+                        <span className="truncate" title={opt}>{opt}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange }) => {
-      const [searchQuery, setSearchQuery] = useState(initialSearch);
-      const [statusFilter, setStatusFilter] = useState('All');
-      const [progressFilter, setProgressFilter] = useState(initialProgressFilter);
-      const [divisionFilter, setDivisionFilter] = useState('All');
-      const [collegeFilter, setCollegeFilter] = useState('All');
+      const [displaySearch, setDisplaySearch] = useState(() => {
+        return localStorage.getItem('filter_search') || initialSearch || '';
+      });
+      const [searchQuery, setSearchQuery] = useState(() => {
+        return localStorage.getItem('filter_search') || initialSearch || '';
+      });
+
+      const [statusFilter, setStatusFilter] = useState(() => {
+        try {
+          const saved = localStorage.getItem('filter_status');
+          return saved ? JSON.parse(saved) : ['Completed', 'In Progress'];
+        } catch(e) {
+          return ['Completed', 'In Progress'];
+        }
+      });
+
+      const [progressFilter, setProgressFilter] = useState(() => {
+        try {
+          if (initialProgressFilter && initialProgressFilter !== 'All') {
+            return [initialProgressFilter];
+          }
+          const saved = localStorage.getItem('filter_progress');
+          return saved ? JSON.parse(saved) : ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
+        } catch(e) {
+          return ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
+        }
+      });
+
+      const [divisionFilter, setDivisionFilter] = useState(() => {
+        try {
+          const saved = localStorage.getItem('filter_division');
+          return saved ? JSON.parse(saved) : [];
+        } catch(e) {
+          return [];
+        }
+      });
+
+      const [collegeFilter, setCollegeFilter] = useState(() => {
+        try {
+          const saved = localStorage.getItem('filter_college');
+          return saved ? JSON.parse(saved) : [];
+        } catch(e) {
+          return [];
+        }
+      });
+
       const [selectedStudent, setSelectedStudent] = useState(null);
 
       // Pagination States
-      const [currentPage, setCurrentPage] = useState(1);
-      const [pageSize, setPageSize] = useState(15);
+      const [currentPage, setCurrentPage] = useState(() => {
+        const saved = localStorage.getItem('filter_currentPage');
+        return saved ? Number(saved) : 1;
+      });
+      const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('filter_pageSize');
+        return saved ? Number(saved) : 15;
+      });
+
+      // Search debounce
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          setSearchQuery(displaySearch);
+          if (onSearchChange) onSearchChange(displaySearch);
+          setCurrentPage(1);
+        }, 220);
+        return () => clearTimeout(timer);
+      }, [displaySearch]);
 
       useEffect(() => {
-        setSearchQuery(initialSearch);
-        setCurrentPage(1);
+        if (initialSearch !== displaySearch) {
+          setDisplaySearch(initialSearch);
+          setSearchQuery(initialSearch);
+          setCurrentPage(1);
+        }
       }, [initialSearch]);
 
       useEffect(() => {
-        setProgressFilter(initialProgressFilter);
+        if (initialProgressFilter === 'All') {
+          try {
+            const saved = localStorage.getItem('filter_progress');
+            if (saved) {
+              setProgressFilter(JSON.parse(saved));
+            } else {
+              setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
+            }
+          } catch(e) {
+            setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
+          }
+        } else if (initialProgressFilter) {
+          setProgressFilter([initialProgressFilter]);
+        }
         setCurrentPage(1);
       }, [initialProgressFilter]);
 
+      // Persistence Sync
+      useEffect(() => {
+        localStorage.setItem('filter_search', searchQuery);
+      }, [searchQuery]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_status', JSON.stringify(statusFilter));
+      }, [statusFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_progress', JSON.stringify(progressFilter));
+      }, [progressFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_division', JSON.stringify(divisionFilter));
+        // Reset college selection when division list changes to avoid selecting orphan colleges
+        setCollegeFilter([]);
+      }, [divisionFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_college', JSON.stringify(collegeFilter));
+      }, [collegeFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_currentPage', String(currentPage));
+      }, [currentPage]);
+
+      useEffect(() => {
+        localStorage.setItem('filter_pageSize', String(pageSize));
+      }, [pageSize]);
+
       const divisions = useMemo(() => {
         const unique = Array.from(new Set(data.filter(d => d.division).map(d => d.division)));
-        return ['All', ...unique.sort()];
+        return unique.sort();
       }, [data]);
 
       const collegesForDivision = useMemo(() => {
         let filtered = data;
-        if (divisionFilter !== 'All') {
-          filtered = data.filter(d => d.division === divisionFilter);
+        if (divisionFilter.length > 0) {
+          filtered = data.filter(d => divisionFilter.includes(d.division));
         }
         const unique = Array.from(new Set(filtered.filter(d => d.college).map(d => d.college)));
-        return ['All', ...unique.sort()];
+        return unique.sort();
       }, [data, divisionFilter]);
 
       const filtered = useMemo(() => {
@@ -1182,21 +1419,20 @@
           }
 
           let matchesProgress = true;
-          if (progressFilter === '0% Completed') {
-            matchesProgress = pComp === 0;
-          } else if (progressFilter === '1%-50% Completed') {
-            matchesProgress = pComp > 0 && pComp <= 50;
-          } else if (progressFilter === '51%-70% Completed') {
-            matchesProgress = pComp > 50 && pComp <= 70;
-          } else if (progressFilter === '71%-99% Completed') {
-            matchesProgress = pComp > 70 && pComp < 100;
-          } else if (progressFilter === '100% Completed') {
-            matchesProgress = pComp >= 100;
+          if (progressFilter.length > 0) {
+            matchesProgress = progressFilter.some(range => {
+              if (range === '0% Completed') return pComp === 0;
+              if (range === '1%-50% Completed') return pComp > 0 && pComp <= 50;
+              if (range === '51%-70% Completed') return pComp > 50 && pComp <= 70;
+              if (range === '71%-99% Completed') return pComp > 70 && pComp < 100;
+              if (range === '100% Completed') return pComp >= 100;
+              return true;
+            });
           }
 
-          const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
-          const matchesDivision = divisionFilter === 'All' || d.division === divisionFilter;
-          const matchesCollege = collegeFilter === 'All' || d.college === collegeFilter;
+          const matchesStatus = statusFilter.length === 0 || statusFilter.includes(d.status);
+          const matchesDivision = divisionFilter.length === 0 || divisionFilter.includes(d.division);
+          const matchesCollege = collegeFilter.length === 0 || collegeFilter.includes(d.college);
           
           return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
         });
@@ -1255,6 +1491,26 @@
           pages.push(totalPages);
         }
         return pages;
+      };
+
+      const handleClearFilters = () => {
+        setStatusFilter(['Completed', 'In Progress']);
+        setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
+        setDivisionFilter([]);
+        setCollegeFilter([]);
+        setDisplaySearch('');
+        setSearchQuery('');
+        setCurrentPage(1);
+        if (onSearchChange) onSearchChange('');
+        if (onProgressFilterChange) onProgressFilterChange('All');
+        
+        localStorage.removeItem('registryFilter');
+        localStorage.removeItem('progressRangeFilter');
+        localStorage.removeItem('filter_search');
+        localStorage.removeItem('filter_status');
+        localStorage.removeItem('filter_progress');
+        localStorage.removeItem('filter_division');
+        localStorage.removeItem('filter_college');
       };
 
       return (
@@ -1376,7 +1632,13 @@
                 <div className="w-3 h-10 bg-brand-green rounded-full shadow-[0_0_15px_rgba(49,184,157,0.4)]"></div>
                 Registration Registry
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button 
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-6 py-4 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all outline-none border border-slate-200"
+                >
+                  <i data-lucide="filter-x" className="w-4 h-4 text-brand-orange"></i> <span>Clear Filters</span>
+                </button>
                 <button 
                   onClick={() => downloadCSV(filtered, `student_report_${new Date().toISOString().slice(0,10)}.csv`)}
                   className="flex items-center gap-2 bg-[#12314C] text-white text-[10px] font-black uppercase px-6 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none"
@@ -1387,92 +1649,68 @@
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {/* Filter 1: Status */}
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Process State</label>
-                <select 
-                  className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="All">All Status Levels</option>
-                  <option value="Completed">Completed Profile</option>
-                  <option value="In Progress">Activity Pending</option>
-                </select>
-              </div>
+              <MultiSelectDropdown 
+                label="Process State"
+                options={['Completed', 'In Progress']}
+                selectedValues={statusFilter}
+                onChange={(vals) => {
+                  setStatusFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
 
-              {/* Filter 2: Progress Range */}
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Progress Range</label>
-                <select 
-                  className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
-                  value={progressFilter}
-                  onChange={(e) => {
-                    setProgressFilter(e.target.value);
-                    if (onProgressFilterChange) onProgressFilterChange(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="All">All Ranges</option>
-                  <option value="0% Completed">0% Completed</option>
-                  <option value="1%-50% Completed">1%-50% Completed</option>
-                  <option value="51%-70% Completed">51%-70% Completed</option>
-                  <option value="71%-99% Completed">71%-99% Completed</option>
-                  <option value="100% Completed">100% Completed</option>
-                </select>
-              </div>
+              <MultiSelectDropdown 
+                label="Progress Range"
+                options={['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']}
+                selectedValues={progressFilter}
+                onChange={(vals) => {
+                  setProgressFilter(vals);
+                  if (onProgressFilterChange) {
+                    onProgressFilterChange(vals.length === 1 ? vals[0] : 'All');
+                  }
+                  setCurrentPage(1);
+                }}
+              />
 
-              {/* Filter 3: Division */}
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Division</label>
-                <select 
-                  className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
-                  value={divisionFilter}
-                  onChange={(e) => {
-                    setDivisionFilter(e.target.value);
-                    setCollegeFilter('All');
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="All">All Divisions</option>
-                  {divisions.map(d => d !== 'All' && <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
+              <MultiSelectDropdown 
+                label="Division Area"
+                options={divisions}
+                selectedValues={divisionFilter}
+                onChange={(vals) => {
+                  setDivisionFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
 
-              {/* Filter 4: College */}
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Specific Institution</label>
-                <select 
-                  className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
-                  value={collegeFilter}
-                  onChange={(e) => {
-                    setCollegeFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="All">All Institutions</option>
-                  {collegesForDivision.map(c => c !== 'All' && <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              <MultiSelectDropdown 
+                label="Specific Institution"
+                options={collegesForDivision}
+                selectedValues={collegeFilter}
+                onChange={(vals) => {
+                  setCollegeFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
 
-              {/* Global Search */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Search</label>
                 <div className="relative">
                   <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
                   <input 
                     placeholder="Search name, contact, etc..."
-                    className="w-full pl-12 pr-4 py-3 bg-brand-bg border border-slate-200 rounded-xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all text-brand-dark"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      if (onSearchChange) onSearchChange(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    style={{ minHeight: "38px" }}
+                    className="w-full pl-12 pr-8 py-2.5 bg-brand-bg border border-slate-200 rounded-xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all text-brand-dark"
+                    value={displaySearch}
+                    onChange={(e) => setDisplaySearch(e.target.value)}
                   />
+                  {displaySearch && (
+                    <button 
+                      onClick={() => setDisplaySearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-extrabold text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1699,9 +1937,21 @@
     };
 
     const App = () => {
-      const [activeTab, setActiveTab] = useState('overview');
-      const [registryFilter, setRegistryFilter] = useState('');
-      const [progressRangeFilter, setProgressRangeFilter] = useState('All');
+      const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'overview');
+      const [registryFilter, setRegistryFilter] = useState(() => localStorage.getItem('registryFilter') || '');
+      const [progressRangeFilter, setProgressRangeFilter] = useState(() => localStorage.getItem('progressRangeFilter') || 'All');
+
+      useEffect(() => {
+        localStorage.setItem('activeTab', activeTab);
+      }, [activeTab]);
+
+      useEffect(() => {
+        localStorage.setItem('registryFilter', registryFilter || '');
+      }, [registryFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
+      }, [progressRangeFilter]);
       const [data, setData] = useState([]);
       const [loading, setLoading] = useState(true);
       const [lastSync, setLastSync] = useState(null);
