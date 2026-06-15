@@ -1134,6 +1134,9 @@
       const [search, setSearch] = useState("");
       const dropdownRef = useRef(null);
 
+      const safeSelected = useMemo(() => Array.isArray(selectedValues) ? selectedValues : [], [selectedValues]);
+      const safeOptions = useMemo(() => Array.isArray(options) ? options : [], [options]);
+
       useEffect(() => {
         const handleClickOutside = (event) => {
           if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -1157,32 +1160,32 @@
       }, [isOpen]);
 
       const handleToggleOption = (val) => {
-        if (selectedValues.includes(val)) {
-          onChange(selectedValues.filter(v => v !== val));
+        if (safeSelected.includes(val)) {
+          onChange(safeSelected.filter(v => v !== val));
         } else {
-          onChange([...selectedValues, val]);
+          onChange([...safeSelected, val]);
         }
       };
 
       const handleSelectAll = (filteredOptions) => {
-        const newSelected = Array.from(new Set([...selectedValues, ...filteredOptions]));
+        const newSelected = Array.from(new Set([...safeSelected, ...filteredOptions]));
         onChange(newSelected);
       };
 
       const handleClear = (filteredOptions) => {
-        onChange(selectedValues.filter(v => !filteredOptions.includes(v)));
+        onChange(safeSelected.filter(v => !filteredOptions.includes(v)));
       };
 
       const filteredOptions = useMemo(() => {
-        return options.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
-      }, [options, search]);
+        return safeOptions.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
+      }, [safeOptions, search]);
 
       const displayLabel = useMemo(() => {
-        if (selectedValues.length === 0) return "All";
-        if (selectedValues.length === options.length) return "All (" + options.length + ")";
-        if (selectedValues.length === 1) return selectedValues[0];
-        return `${selectedValues.length} Selected`;
-      }, [selectedValues, options]);
+        if (safeSelected.length === 0) return "All";
+        if (safeSelected.length === safeOptions.length) return "All (" + safeOptions.length + ")";
+        if (safeSelected.length === 1) return safeSelected[0];
+        return `${safeSelected.length} Selected`;
+      }, [safeSelected, safeOptions]);
 
       return (
         <div className="space-y-1.5 relative w-full" ref={dropdownRef}>
@@ -1193,7 +1196,7 @@
           >
             <span className="truncate max-w-[150px]">{displayLabel}</span>
             <div className="flex items-center gap-1">
-              {selectedValues.length > 0 && (
+              {safeSelected.length > 0 && (
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1217,7 +1220,7 @@
               </div>
               
               {/* Search box if options are numerous */}
-              {options.length > 4 && (
+              {safeOptions.length > 4 && (
                 <div className="relative shrink-0">
                   <i data-lucide="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"></i>
                   <input
@@ -1237,7 +1240,7 @@
                   <p className="text-[9px] font-bold text-slate-400 uppercase text-center py-2">No options found</p>
                 ) : (
                   filteredOptions.map(opt => {
-                    const checked = selectedValues.includes(opt);
+                    const checked = safeSelected.includes(opt);
                     return (
                       <label 
                         key={opt} 
@@ -1368,19 +1371,24 @@
         localStorage.setItem('filter_pageSize', String(pageSize));
       }, [pageSize]);
 
+      const safeStatusFilter = useMemo(() => Array.isArray(statusFilter) ? statusFilter : ['Completed', 'In Progress'], [statusFilter]);
+      const safeProgressFilter = useMemo(() => Array.isArray(progressFilter) ? progressFilter : ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'], [progressFilter]);
+      const safeDivisionFilter = useMemo(() => Array.isArray(divisionFilter) ? divisionFilter : [], [divisionFilter]);
+      const safeCollegeFilter = useMemo(() => Array.isArray(collegeFilter) ? collegeFilter : [], [collegeFilter]);
+
       const divisions = useMemo(() => {
         const unique = Array.from(new Set(data.filter(d => d.division).map(d => d.division)));
         return unique.sort();
       }, [data]);
 
       const collegesForDivision = useMemo(() => {
-        let filtered = data;
-        if (divisionFilter.length > 0) {
-          filtered = data.filter(d => divisionFilter.includes(d.division));
+        let filteredVal = data;
+        if (safeDivisionFilter.length > 0) {
+          filteredVal = data.filter(d => safeDivisionFilter.includes(d.division));
         }
-        const unique = Array.from(new Set(filtered.filter(d => d.college).map(d => d.college)));
+        const unique = Array.from(new Set(filteredVal.filter(d => d.college).map(d => d.college)));
         return unique.sort();
-      }, [data, divisionFilter]);
+      }, [data, safeDivisionFilter]);
 
       const filtered = useMemo(() => {
         return data.filter(d => {
@@ -1399,8 +1407,8 @@
           }
 
           let matchesProgress = true;
-          if (progressFilter.length > 0) {
-            matchesProgress = progressFilter.some(range => {
+          if (safeProgressFilter.length > 0) {
+            matchesProgress = safeProgressFilter.some(range => {
               if (range === '0% Completed') return pComp === 0;
               if (range === '1%-50% Completed') return pComp > 0 && pComp <= 50;
               if (range === '51%-70% Completed') return pComp > 50 && pComp <= 70;
@@ -1410,13 +1418,13 @@
             });
           }
 
-          const matchesStatus = statusFilter.length === 0 || statusFilter.includes(d.status);
-          const matchesDivision = divisionFilter.length === 0 || divisionFilter.includes(d.division);
-          const matchesCollege = collegeFilter.length === 0 || collegeFilter.includes(d.college);
+          const matchesStatus = safeStatusFilter.length === 0 || safeStatusFilter.includes(d.status);
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.includes(d.division);
+          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.includes(d.college);
           
           return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
         });
-      }, [data, searchQuery, statusFilter, progressFilter, divisionFilter, collegeFilter]);
+      }, [data, searchQuery, safeStatusFilter, safeProgressFilter, safeDivisionFilter, safeCollegeFilter]);
 
       // Calculate paginated slices
       const totalItems = filtered.length;
@@ -1632,7 +1640,7 @@
               <MultiSelectDropdown 
                 label="Process State"
                 options={['Completed', 'In Progress']}
-                selectedValues={statusFilter}
+                selectedValues={safeStatusFilter}
                 onChange={(vals) => {
                   setStatusFilter(vals);
                   setCurrentPage(1);
@@ -1642,7 +1650,7 @@
               <MultiSelectDropdown 
                 label="Progress Range"
                 options={['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']}
-                selectedValues={progressFilter}
+                selectedValues={safeProgressFilter}
                 onChange={(vals) => {
                   setProgressFilter(vals);
                   if (onProgressFilterChange) {
@@ -1655,7 +1663,7 @@
               <MultiSelectDropdown 
                 label="Division Area"
                 options={divisions}
-                selectedValues={divisionFilter}
+                selectedValues={safeDivisionFilter}
                 onChange={(vals) => {
                   setDivisionFilter(vals);
                   setCurrentPage(1);
@@ -1665,7 +1673,7 @@
               <MultiSelectDropdown 
                 label="Specific Institution"
                 options={collegesForDivision}
-                selectedValues={collegeFilter}
+                selectedValues={safeCollegeFilter}
                 onChange={(vals) => {
                   setCollegeFilter(vals);
                   setCurrentPage(1);
