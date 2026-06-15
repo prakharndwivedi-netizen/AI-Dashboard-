@@ -1137,12 +1137,18 @@
       const [collegeFilter, setCollegeFilter] = useState('All');
       const [selectedStudent, setSelectedStudent] = useState(null);
 
+      // Pagination States
+      const [currentPage, setCurrentPage] = useState(1);
+      const [pageSize, setPageSize] = useState(15);
+
       useEffect(() => {
         setSearchQuery(initialSearch);
+        setCurrentPage(1);
       }, [initialSearch]);
 
       useEffect(() => {
         setProgressFilter(initialProgressFilter);
+        setCurrentPage(1);
       }, [initialProgressFilter]);
 
       const divisions = useMemo(() => {
@@ -1159,40 +1165,97 @@
         return ['All', ...unique.sort()];
       }, [data, divisionFilter]);
 
-      const filtered = data.filter(d => {
-        const q = searchQuery.toLowerCase();
-        // Match against original values but show masked in UI
-        const matchesSearch = 
-          String(d.firstName).toLowerCase().includes(q) || 
-          String(d.lastName).toLowerCase().includes(q) || 
-          String(d.college).toLowerCase().includes(q) ||
-          String(d.email || '').toLowerCase().includes(q) ||
-          String(d.phoneNumber || '').toLowerCase().includes(q);
-        
-        let pComp = parseFloat(d.completedPercent);
-        if (isNaN(pComp)) {
-          pComp = d.status === 'Completed' ? 100 : 0;
-        }
+      const filtered = useMemo(() => {
+        return data.filter(d => {
+          const q = searchQuery.toLowerCase();
+          // Match against original values but show masked in UI
+          const matchesSearch = 
+            String(d.firstName).toLowerCase().includes(q) || 
+            String(d.lastName).toLowerCase().includes(q) || 
+            String(d.college).toLowerCase().includes(q) ||
+            String(d.email || '').toLowerCase().includes(q) ||
+            String(d.phoneNumber || '').toLowerCase().includes(q);
+          
+          let pComp = parseFloat(d.completedPercent);
+          if (isNaN(pComp)) {
+            pComp = d.status === 'Completed' ? 100 : 0;
+          }
 
-        let matchesProgress = true;
-        if (progressFilter === '0% Completed') {
-          matchesProgress = pComp === 0;
-        } else if (progressFilter === '1%-50% Completed') {
-          matchesProgress = pComp > 0 && pComp <= 50;
-        } else if (progressFilter === '51%-70% Completed') {
-          matchesProgress = pComp > 50 && pComp <= 70;
-        } else if (progressFilter === '71%-99% Completed') {
-          matchesProgress = pComp > 70 && pComp < 100;
-        } else if (progressFilter === '100% Completed') {
-          matchesProgress = pComp >= 100;
-        }
+          let matchesProgress = true;
+          if (progressFilter === '0% Completed') {
+            matchesProgress = pComp === 0;
+          } else if (progressFilter === '1%-50% Completed') {
+            matchesProgress = pComp > 0 && pComp <= 50;
+          } else if (progressFilter === '51%-70% Completed') {
+            matchesProgress = pComp > 50 && pComp <= 70;
+          } else if (progressFilter === '71%-99% Completed') {
+            matchesProgress = pComp > 70 && pComp < 100;
+          } else if (progressFilter === '100% Completed') {
+            matchesProgress = pComp >= 100;
+          }
 
-        const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
-        const matchesDivision = divisionFilter === 'All' || d.division === divisionFilter;
-        const matchesCollege = collegeFilter === 'All' || d.college === collegeFilter;
-        
-        return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
-      });
+          const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
+          const matchesDivision = divisionFilter === 'All' || d.division === divisionFilter;
+          const matchesCollege = collegeFilter === 'All' || d.college === collegeFilter;
+          
+          return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
+        });
+      }, [data, searchQuery, statusFilter, progressFilter, divisionFilter, collegeFilter]);
+
+      // Calculate paginated slices
+      const totalItems = filtered.length;
+      const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+      // Adjust page if it exceeds total pages after filter change
+      useEffect(() => {
+        if (currentPage > totalPages) {
+          setCurrentPage(1);
+        }
+      }, [filtered, totalPages, currentPage]);
+
+      const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+      }, [filtered, currentPage, pageSize]);
+
+      // Render icons selectively on active paginatedData changes
+      useEffect(() => {
+        try {
+          if (window.lucide) window.lucide.createIcons();
+        } catch (e) {
+          console.warn("Lucide createIcons failed safely in Paginated StudentTable", e);
+        }
+      }, [paginatedData, selectedStudent]);
+
+      const getVisiblePages = () => {
+        const pages = [];
+        const maxVisible = 5;
+        if (totalPages <= maxVisible) {
+          for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          let start = Math.max(2, currentPage - 1);
+          let end = Math.min(totalPages - 1, currentPage + 1);
+          
+          if (currentPage <= 3) {
+            end = 4;
+          } else if (currentPage >= totalPages - 2) {
+            start = totalPages - 3;
+          }
+          
+          if (start > 2) {
+            pages.push('...');
+          }
+          for (let i = start; i <= end; i++) {
+            pages.push(i);
+          }
+          if (end < totalPages - 1) {
+            pages.push('...');
+          }
+          pages.push(totalPages);
+        }
+        return pages;
+      };
 
       return (
         <div className="p-4 md:p-8 space-y-6">
@@ -1207,7 +1270,7 @@
                   
                   <div className="relative z-10 flex items-end gap-6">
                     <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-xl border-2 border-white/20">
-                      <span className="text-3xl font-black">{selectedStudent.firstName[0]}{selectedStudent.lastName[0]}</span>
+                      <span className="text-3xl font-black">{selectedStudent.firstName ? selectedStudent.firstName[0] : 'S'}{selectedStudent.lastName ? selectedStudent.lastName[0] : ''}</span>
                     </div>
                     <div className="flex-1">
                       <div className="inline-flex items-center gap-2 px-2 py-0.5 rounded bg-brand-green/20 border border-brand-green/30 mb-2">
@@ -1330,7 +1393,10 @@
                 <select 
                   className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option value="All">All Status Levels</option>
                   <option value="Completed">Completed Profile</option>
@@ -1347,6 +1413,7 @@
                   onChange={(e) => {
                     setProgressFilter(e.target.value);
                     if (onProgressFilterChange) onProgressFilterChange(e.target.value);
+                    setCurrentPage(1);
                   }}
                 >
                   <option value="All">All Ranges</option>
@@ -1367,6 +1434,7 @@
                   onChange={(e) => {
                     setDivisionFilter(e.target.value);
                     setCollegeFilter('All');
+                    setCurrentPage(1);
                   }}
                 >
                   <option value="All">All Divisions</option>
@@ -1380,7 +1448,10 @@
                 <select 
                   className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-5 py-3 outline-none cursor-pointer hover:border-brand-green/30 transition-all text-brand-dark"
                   value={collegeFilter}
-                  onChange={(e) => setCollegeFilter(e.target.value)}
+                  onChange={(e) => {
+                    setCollegeFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option value="All">All Institutions</option>
                   {collegesForDivision.map(c => c !== 'All' && <option key={c} value={c}>{c}</option>)}
@@ -1399,6 +1470,7 @@
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
                       if (onSearchChange) onSearchChange(e.target.value);
+                      setCurrentPage(1);
                     }}
                   />
                 </div>
@@ -1419,8 +1491,8 @@
                 </tr>
               </thead>
               <tbody className="text-xs text-brand-dark">
-                {filtered.map((s, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-brand-green/[0.04] transition-all group cursor-pointer" onClick={() => setSelectedStudent(s)}>
+                {paginatedData.map((s, i) => (
+                  <tr key={s.id || i} className="border-b border-slate-100 hover:bg-brand-green/[0.04] transition-all group cursor-pointer" onClick={() => setSelectedStudent(s)}>
                     <td className="px-10 py-6">
                       <div className="flex flex-col">
                         <span className="font-black text-[15px] group-hover:text-brand-green transition-colors tracking-tight uppercase leading-none">{s.firstName} {s.lastName}</span>
@@ -1461,7 +1533,7 @@
                     <td className="px-10 py-6">
                       <div className="flex justify-center">
                         <span className={`px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-[0.15em] shadow-sm transition-all group-hover:scale-105 ${s.status === 'Completed' ? 'bg-brand-green text-white shadow-brand-green/20' : 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20'}`}>
-                          {s.status}
+                           {s.status}
                         </span>
                       </div>
                     </td>
@@ -1493,9 +1565,9 @@
 
           {/* Mobile View: High density list of elegant, compact student cards */}
           <div className="block md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
-            {filtered.map((s, i) => (
+            {paginatedData.map((s, i) => (
               <div 
-                key={i} 
+                key={s.id || i} 
                 className="p-4 hover:bg-brand-green/[0.04] active:bg-brand-green/[0.08] transition-all cursor-pointer flex items-center justify-between gap-4"
                 onClick={() => setSelectedStudent(s)}
               >
@@ -1545,6 +1617,83 @@
               </div>
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="bg-white border border-slate-200 rounded-[1.5rem] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                Showing <span className="text-brand-dark">{Math.min(totalItems, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                <span className="text-brand-dark">{Math.min(totalItems, currentPage * pageSize)}</span> of{' '}
+                <span className="text-brand-green">{totalItems}</span> entries
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2 mr-4">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Per Page</span>
+                  <select
+                    className="bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-lg px-2 py-1 outline-none cursor-pointer text-brand-dark"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(1)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    «
+                  </button>
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    ‹
+                  </button>
+                  
+                  {getVisiblePages().map((p, idx) => (
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="w-8 h-8 flex items-center justify-center text-[10px] font-black text-slate-300">...</span>
+                    ) : (
+                      <button
+                        key={`page-${p}`}
+                        onClick={() => setCurrentPage(p)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${currentPage === p ? 'bg-[#12314C] text-white' : 'border border-slate-200 text-slate-600 hover:border-brand-green/30 hover:bg-brand-green/[0.04]'}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  ))}
+
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => prev - 1 + 2)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    ›
+                  </button>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
