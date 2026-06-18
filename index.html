@@ -85,11 +85,23 @@
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
+  <script>
+    if (window.Babel) {
+      Babel.registerPreset('custom-babel-preset', {
+        presets: [
+          [Babel.availablePresets['env'], {}],
+          [Babel.availablePresets['react'], { runtime: 'classic' }]
+        ]
+      });
+    }
+  </script>
+
+  <script type="text/babel" data-presets="custom-babel-preset">
     const { useState, useMemo, useEffect, useRef } = React;
 
     const getIconSvg = (name, className = "w-4 h-4") => {
       try {
+        if (!name || typeof name !== 'string') return '';
         if (!window.lucide || !window.lucide.icons) return '';
         // Map kebab-case to PascalCase (e.g., 'map-pin' to 'MapPin', 'search' to 'Search')
         const pascalName = name
@@ -1374,11 +1386,13 @@
       // Pagination States
       const [currentPage, setCurrentPage] = useState(() => {
         const saved = localStorage.getItem('filter_currentPage');
-        return saved ? Number(saved) : 1;
+        const num = saved ? Number(saved) : 1;
+        return isNaN(num) || num < 1 ? 1 : num;
       });
       const [pageSize, setPageSize] = useState(() => {
         const saved = localStorage.getItem('filter_pageSize');
-        return saved ? Number(saved) : 15;
+        const num = saved ? Number(saved) : 15;
+        return isNaN(num) || num < 1 ? 15 : num;
       });
 
       // Search debounce
@@ -2059,6 +2073,7 @@
       const [loading, setLoading] = useState(true);
       const [lastSync, setLastSync] = useState(null);
       const [isLive, setIsLive] = useState(false);
+      const safeData = useMemo(() => Array.isArray(data) ? data : [], [data]);
 
       const mockData = useMemo(() => [
         { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
@@ -2345,7 +2360,7 @@
             <main className="flex-1 p-4 lg:p-8 bg-[#F2F2F2]">
               {activeTab === 'overview' ? (
                 <Dashboard 
-                  data={data} 
+                  data={safeData} 
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
@@ -2373,7 +2388,7 @@
                 />
               ) : (
                 <StudentTable 
-                  data={data} 
+                  data={safeData} 
                   initialSearch={registryFilter}
                   onSearchChange={setRegistryFilter}
                   initialProgressFilter={progressRangeFilter}
