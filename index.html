@@ -2057,6 +2057,7 @@
       const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'overview');
       const [registryFilter, setRegistryFilter] = useState(() => localStorage.getItem('registryFilter') || '');
       const [progressRangeFilter, setProgressRangeFilter] = useState(() => localStorage.getItem('progressRangeFilter') || 'All');
+      const [selectedMonth, setSelectedMonth] = useState(() => localStorage.getItem('selectedMonth') || 'All');
 
       useEffect(() => {
         localStorage.setItem('activeTab', activeTab);
@@ -2069,11 +2070,77 @@
       useEffect(() => {
         localStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
       }, [progressRangeFilter]);
+
+      useEffect(() => {
+        localStorage.setItem('selectedMonth', selectedMonth || 'All');
+      }, [selectedMonth]);
+
       const [data, setData] = useState([]);
       const [loading, setLoading] = useState(true);
       const [lastSync, setLastSync] = useState(null);
       const [isLive, setIsLive] = useState(false);
       const safeData = useMemo(() => Array.isArray(data) ? data : [], [data]);
+
+      const parseMonthYear = (dateStr) => {
+        if (!dateStr) return null;
+        
+        const str = String(dateStr).trim();
+        // Match YYYY-MM-DD
+        let match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+          const year = parseInt(match[1]);
+          const month = parseInt(match[2]) - 1;
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          if (month >= 0 && month < 12) {
+            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+        
+        // Match MM/DD/YYYY
+        let matchUS = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (matchUS) {
+          const year = parseInt(matchUS[3]);
+          const month = parseInt(matchUS[1]) - 1;
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          if (month >= 0 && month < 12) {
+            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+
+        const date = new Date(str);
+        if (!isNaN(date.getTime())) {
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const year = date.getFullYear();
+          const month = date.getMonth();
+          return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+        }
+        
+        return null;
+      };
+
+      const monthOptions = useMemo(() => {
+        const monthsMap = {};
+        safeData.forEach(student => {
+          const parsed = parseMonthYear(student.startedAt);
+          if (parsed) {
+            monthsMap[parsed.raw] = parsed.label;
+          }
+        });
+        
+        const sortedKeys = Object.keys(monthsMap).sort((a, b) => a.localeCompare(b));
+        return [
+          { value: 'All', label: 'All Months' },
+          ...sortedKeys.map(key => ({ value: key, label: monthsMap[key] }))
+        ];
+      }, [safeData]);
+
+      const filteredData = useMemo(() => {
+        if (selectedMonth === 'All') return safeData;
+        return safeData.filter(student => {
+          const parsed = parseMonthYear(student.startedAt);
+          return parsed && parsed.raw === selectedMonth;
+        });
+      }, [safeData, selectedMonth]);
 
       const mockData = useMemo(() => [
         { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
@@ -2266,6 +2333,29 @@
                 <LucideIcon name="users" className="w-3 h-3" /> Registry
               </button>
             </div>
+            
+            {/* Mobile Month Filter */}
+            <div className="p-3 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <LucideIcon name="calendar" className="w-3.5 h-3.5 text-brand-green" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Filter Month:</span>
+              </div>
+              <div className="relative min-w-[140px]">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full text-[10px] font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green rounded-lg py-1 px-3.5 pr-8 appearance-none focus:outline-none transition-all"
+                >
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+                  <LucideIcon name="chevron-down" className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+
             <div className="flex overflow-x-auto no-scrollbar bg-slate-50 p-2 gap-2">
               <a href="https://pehel.medha.org.in/systemAdoption" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
                 <LucideIcon name="user-plus" className="w-3 h-3" /> Register
@@ -2299,6 +2389,34 @@
                     <LucideIcon name="users" className="w-4 h-4" /> Registry
                   </button>
                 </nav>
+
+                {/* Desktop Month Filter */}
+                <div className="pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Month wise Filter</p>
+                        <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
+                      </div>
+                      <LucideIcon name="calendar" className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                    
+                    <div className="relative">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green/50 rounded-xl p-2.5 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                      >
+                        {monthOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <LucideIcon name="chevron-down" className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="pt-6 border-t border-slate-100">
                   <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
@@ -2360,7 +2478,7 @@
             <main className="flex-1 p-4 lg:p-8 bg-[#F2F2F2]">
               {activeTab === 'overview' ? (
                 <Dashboard 
-                  data={safeData} 
+                  data={filteredData} 
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
@@ -2388,7 +2506,7 @@
                 />
               ) : (
                 <StudentTable 
-                  data={safeData} 
+                  data={filteredData} 
                   initialSearch={registryFilter}
                   onSearchChange={setRegistryFilter}
                   initialProgressFilter={progressRangeFilter}
