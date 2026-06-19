@@ -86,8 +86,34 @@ function getSpreadsheetData() {
         gender: obj.gender || obj.sex || 'Not Specified',
         category: obj.category || obj.socialcategory || 'General',
         incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-        startedAt: obj.startedat || '',
-        completedAt: obj.completedat || '',
+        startedAt: (() => {
+          const dateKeys = ['startedat', 'registrationdate', 'timestamp', 'createdat', 'submissiondate', 'date', 'datetime', 'enrolledat', 'enrollmentdate', 'joiningdate', 'startingdate'];
+          for (let i = 0; i < dateKeys.length; i++) {
+            if (obj[dateKeys[i]]) return obj[dateKeys[i]];
+          }
+          const keys = Object.keys(obj);
+          for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if ((k.indexOf('date') !== -1 || k.indexOf('time') !== -1 || k.substring(Math.max(0, k.length - 2)) === 'at' || k.indexOf('start') !== -1) && k.indexOf('completed') === -1) {
+              return obj[k];
+            }
+          }
+          return '';
+        })(),
+        completedAt: (() => {
+          const compDateKeys = ['completedat', 'completiondate', 'completed_at', 'finishdate', 'finishedat', 'completed'];
+          for (let i = 0; i < compDateKeys.length; i++) {
+            if (obj[compDateKeys[i]]) return obj[compDateKeys[i]];
+          }
+          const keys = Object.keys(obj);
+          for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if ((k.indexOf('date') !== -1 || k.indexOf('time') !== -1 || k.substring(Math.max(0, k.length - 2)) === 'at') && k.indexOf('completed') !== -1) {
+              return obj[k];
+            }
+          }
+          return '';
+        })(),
         completedPercent: completedValue
       };
     });
