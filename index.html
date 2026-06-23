@@ -11,11 +11,11 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
-  <script src="https://cdn.tailwindcss.com" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.0/dist/react-apexcharts.iife.min.js" crossorigin></script>
   <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js" crossorigin></script>
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js" crossorigin></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
   
   <script>
     window.onerror = function(msg, url, lineNo, columnNo, error) {
@@ -98,31 +98,6 @@
 
   <script type="text/babel" data-presets="custom-babel-preset">
     const { useState, useMemo, useEffect, useRef } = React;
-
-    const safeLocalStorage = {
-      getItem(key) {
-        try {
-          return localStorage.getItem(key);
-        } catch (e) {
-          console.warn("Storage warning: Reading localStorage is blocked or unavailable.", e);
-          return null;
-        }
-      },
-      setItem(key, value) {
-        try {
-          localStorage.setItem(key, value);
-        } catch (e) {
-          console.warn("Storage warning: Writing to localStorage is blocked or unavailable.", e);
-        }
-      },
-      removeItem(key) {
-        try {
-          localStorage.removeItem(key);
-        } catch (e) {
-          console.warn("Storage warning: Removing from localStorage is blocked or unavailable.", e);
-        }
-      }
-    };
 
     const getIconSvg = (name, className = "w-4 h-4") => {
       try {
@@ -533,86 +508,7 @@
       </div>
     );
 
-    const MonthMultiSelect = ({ options, selectedValues = [], onChange }) => {
-      const [isOpen, setIsOpen] = useState(false);
-      const dropdownRef = useRef(null);
-
-      const safeSelectedValues = useMemo(() => Array.isArray(selectedValues) ? selectedValues : [], [selectedValues]);
-      const safeOptions = useMemo(() => Array.isArray(options) ? options : [], [options]);
-
-      useEffect(() => {
-        const handleClickOutside = (event) => {
-          if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-            setIsOpen(false);
-          }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-      }, []);
-
-      const displayLabel = useMemo(() => {
-        if (safeSelectedValues.length === 0) return "All Months";
-        if (safeSelectedValues.length === safeOptions.length) return "All Months";
-        if (safeSelectedValues.length === 1) {
-          const matched = safeOptions.find(o => o.value === safeSelectedValues[0]);
-          return matched ? matched.label : safeSelectedValues[0];
-        }
-        return `${safeSelectedValues.length} Months`;
-      }, [safeSelectedValues, safeOptions]);
-
-      return (
-        <div className="relative w-full" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="w-full h-[38px] flex items-center justify-between text-[10px] font-black uppercase text-slate-700 bg-white border border-slate-200 hover:border-brand-green/35 rounded-xl px-4 py-2.5 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-green/20"
-          >
-            <span className="truncate max-w-[150px]">{displayLabel}</span>
-            <LucideIcon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-          </button>
-          
-          {isOpen && (
-            <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase rounded-lg text-slate-700 hover:bg-slate-50 justify-between transition-colors"
-              >
-                <span>All Months</span>
-                {safeSelectedValues.length === 0 && <LucideIcon name="check" className="w-3.5 h-3.5 text-brand-green stroke-[3px]" />}
-              </button>
-              
-              <div className="h-px bg-slate-100 my-1"></div>
-              
-              {safeOptions.map(opt => {
-                const isChecked = safeSelectedValues.includes(opt.value);
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      if (isChecked) {
-                        onChange(safeSelectedValues.filter(val => val !== opt.value));
-                      } else {
-                        onChange([...safeSelectedValues, opt.value]);
-                      }
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase rounded-lg text-slate-700 hover:bg-slate-50 justify-between transition-colors"
-                  >
-                    <span className="truncate">{opt.label}</span>
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-green border-brand-green text-white' : 'border-slate-300'}`}>
-                      {isChecked && <LucideIcon name="check" className="w-3 h-3 text-white stroke-[3px]" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const Dashboard = ({ data, onViewRegistry, onViewProgressRegistry, lastSync, isLive, monthOptions, selectedMonths, setSelectedMonths }) => {
+    const Dashboard = ({ data, onViewRegistry, onViewProgressRegistry, lastSync, isLive }) => {
       const [selectedDivision, setSelectedDivision] = useState('All');
       const [searchQuery, setSearchQuery] = useState('');
       const [reportSearch, setReportSearch] = useState('');
@@ -853,14 +749,6 @@
               >
                 {divisions.map(d => <option key={d} value={d} className="bg-white">{d}</option>)}
               </select>
-
-              <div className="w-full md:w-48 shrink-0">
-                <MonthMultiSelect 
-                  options={monthOptions}
-                  selectedValues={selectedMonths}
-                  onChange={setSelectedMonths}
-                />
-              </div>
 
               <div 
                 ref={searchContainerRef}
@@ -1311,107 +1199,6 @@
       }
     };
 
-    const loadScript = (src) => {
-      return new Promise((resolve, reject) => {
-        const existing = document.querySelector(`script[src="${src}"]`);
-        if (existing) {
-          if (existing.getAttribute('data-loaded') === 'true') {
-            resolve();
-            return;
-          }
-          existing.addEventListener('load', () => resolve());
-          existing.addEventListener('error', (err) => reject(err));
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = src;
-        script.crossOrigin = 'anonymous';
-        script.onload = () => {
-          script.setAttribute('data-loaded', 'true');
-          resolve();
-        };
-        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-        document.head.appendChild(script);
-      });
-    };
-
-    const downloadPDF = async (data, filename) => {
-      if (data.length === 0) return;
-      
-      let jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-      if (!jsPDFClass) {
-        try {
-          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js");
-          jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-        } catch (err) {
-          console.error("Error loading PDF libraries dynamically:", err);
-          return;
-        }
-      }
-      
-      if (!jsPDFClass) {
-        console.error("PDF class not found. Make sure the library is fully loaded.");
-        return;
-      }
-      
-      const doc = new jsPDFClass({ orientation: 'landscape', format: 'a4' });
-      
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.setTextColor(18, 49, 76);
-      doc.text("Medha Student Registration Registry Report", 14, 15);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${data.length}`, 14, 21);
-      
-      const headers = [['First Name', 'Last Name', 'College', 'Division', 'District', 'Trade', 'Status', 'Progress (%)', 'Completed At']];
-      const rows = data.map(item => [
-        item.firstName || '',
-        item.lastName || '',
-        item.college || '',
-        item.division || '',
-        item.district || '',
-        item.trade || '',
-        item.status || '',
-        `${item.completedPercent || 0}%`,
-        item.completedAt || 'N/A'
-      ]);
-      
-      doc.autoTable({
-        startY: 25,
-        head: headers,
-        body: rows,
-        theme: 'striped',
-        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
-        headStyles: { fillColor: [18, 49, 76], textColor: [255, 255, 255], fontStyle: 'bold' },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 'auto' },
-          3: { cellWidth: 25 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 35 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 15 },
-          8: { cellWidth: 25 }
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { top: 25, left: 14, right: 14, bottom: 15 },
-        didDrawPage: function(dataDraw) {
-          const pageCount = doc.internal.getNumberOfPages();
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(148, 163, 184);
-          doc.text(`Page ${dataDraw.pageNumber} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8);
-        }
-      });
-      
-      doc.save(filename);
-    };
-
     const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeholder = "Select..." }) => {
       const [isOpen, setIsOpen] = useState(false);
       const [search, setSearch] = useState("");
@@ -1539,17 +1326,17 @@
       );
     };
 
-    const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange, monthOptions, selectedMonths, setSelectedMonths }) => {
+    const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange }) => {
       const [displaySearch, setDisplaySearch] = useState(() => {
-        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
+        return localStorage.getItem('filter_search') || initialSearch || '';
       });
       const [searchQuery, setSearchQuery] = useState(() => {
-        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
+        return localStorage.getItem('filter_search') || initialSearch || '';
       });
 
       const [statusFilter, setStatusFilter] = useState(() => {
         try {
-          const saved = safeLocalStorage.getItem('filter_status');
+          const saved = localStorage.getItem('filter_status');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1560,7 +1347,7 @@
 
       const [progressFilter, setProgressFilter] = useState(() => {
         try {
-          const saved = safeLocalStorage.getItem('filter_progress');
+          const saved = localStorage.getItem('filter_progress');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1574,7 +1361,7 @@
 
       const [divisionFilter, setDivisionFilter] = useState(() => {
         try {
-          const saved = safeLocalStorage.getItem('filter_division');
+          const saved = localStorage.getItem('filter_division');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1585,7 +1372,7 @@
 
       const [collegeFilter, setCollegeFilter] = useState(() => {
         try {
-          const saved = safeLocalStorage.getItem('filter_college');
+          const saved = localStorage.getItem('filter_college');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1598,12 +1385,12 @@
 
       // Pagination States
       const [currentPage, setCurrentPage] = useState(() => {
-        const saved = safeLocalStorage.getItem('filter_currentPage');
+        const saved = localStorage.getItem('filter_currentPage');
         const num = saved ? Number(saved) : 1;
         return isNaN(num) || num < 1 ? 1 : num;
       });
       const [pageSize, setPageSize] = useState(() => {
-        const saved = safeLocalStorage.getItem('filter_pageSize');
+        const saved = localStorage.getItem('filter_pageSize');
         const num = saved ? Number(saved) : 15;
         return isNaN(num) || num < 1 ? 15 : num;
       });
@@ -1620,31 +1407,31 @@
 
       // Persistence Sync
       useEffect(() => {
-        safeLocalStorage.setItem('filter_search', searchQuery);
+        localStorage.setItem('filter_search', searchQuery);
       }, [searchQuery]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_status', JSON.stringify(statusFilter));
+        localStorage.setItem('filter_status', JSON.stringify(statusFilter));
       }, [statusFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_progress', JSON.stringify(progressFilter));
+        localStorage.setItem('filter_progress', JSON.stringify(progressFilter));
       }, [progressFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_division', JSON.stringify(divisionFilter));
+        localStorage.setItem('filter_division', JSON.stringify(divisionFilter));
       }, [divisionFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_college', JSON.stringify(collegeFilter));
+        localStorage.setItem('filter_college', JSON.stringify(collegeFilter));
       }, [collegeFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_currentPage', String(currentPage));
+        localStorage.setItem('filter_currentPage', String(currentPage));
       }, [currentPage]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('filter_pageSize', String(pageSize));
+        localStorage.setItem('filter_pageSize', String(pageSize));
       }, [pageSize]);
 
       const safeStatusFilter = useMemo(() => Array.isArray(statusFilter) ? statusFilter : ['Completed', 'In Progress'], [statusFilter]);
@@ -1776,13 +1563,13 @@
         if (onSearchChange) onSearchChange('');
         if (onProgressFilterChange) onProgressFilterChange('All');
         
-         safeLocalStorage.removeItem('registryFilter');
-        safeLocalStorage.removeItem('progressRangeFilter');
-        safeLocalStorage.removeItem('filter_search');
-        safeLocalStorage.removeItem('filter_status');
-        safeLocalStorage.removeItem('filter_progress');
-        safeLocalStorage.removeItem('filter_division');
-        safeLocalStorage.removeItem('filter_college');
+        localStorage.removeItem('registryFilter');
+        localStorage.removeItem('progressRangeFilter');
+        localStorage.removeItem('filter_search');
+        localStorage.removeItem('filter_status');
+        localStorage.removeItem('filter_progress');
+        localStorage.removeItem('filter_division');
+        localStorage.removeItem('filter_college');
       };
 
       return (
@@ -1914,20 +1701,14 @@
                 </button>
                 <button 
                   onClick={() => downloadCSV(filtered, `student_report_${new Date().toISOString().slice(0,10)}.csv`)}
-                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
+                  className="flex items-center gap-2 bg-[#12314C] text-white text-[10px] font-black uppercase px-6 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none"
                 >
-                  <LucideIcon name="file-text" className="w-4 h-4 text-brand-green" /> <span>Export CSV</span>
-                </button>
-                <button 
-                  onClick={() => downloadPDF(filtered, `student_report_${new Date().toISOString().slice(0,10)}.pdf`)}
-                  className="flex items-center gap-2 bg-[#12314C] hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
-                >
-                  <LucideIcon name="download" className="w-4 h-4 text-amber-400" /> <span>Export PDF</span>
+                  <LucideIcon name="download" className="w-4 h-4 text-brand-green" /> <span>Export Ledger</span>
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <MultiSelectDropdown 
                 label="Process State"
                 options={['Completed', 'In Progress']}
@@ -1970,15 +1751,6 @@
                   setCurrentPage(1);
                 }}
               />
-
-              <div className="space-y-1.5 font-sans">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Filter Month</label>
-                <MonthMultiSelect 
-                  options={monthOptions}
-                  selectedValues={selectedMonths}
-                  onChange={setSelectedMonths}
-                />
-              </div>
 
               <div className="space-y-1.5">
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Search</label>
@@ -2282,31 +2054,26 @@
     };
 
     const App = () => {
-      const [activeTab, setActiveTab] = useState('overview');
-      const [registryFilter, setRegistryFilter] = useState(() => safeLocalStorage.getItem('registryFilter') || '');
-      const [progressRangeFilter, setProgressRangeFilter] = useState(() => safeLocalStorage.getItem('progressRangeFilter') || 'All');
-      const [selectedMonths, setSelectedMonths] = useState(() => {
-        try {
-          const val = safeLocalStorage.getItem('selectedMonths');
-          if (val) {
-            const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) return parsed;
-          }
-        } catch(e) {}
-        return [];
-      });
+      const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'overview');
+      const [registryFilter, setRegistryFilter] = useState(() => localStorage.getItem('registryFilter') || '');
+      const [progressRangeFilter, setProgressRangeFilter] = useState(() => localStorage.getItem('progressRangeFilter') || 'All');
+      const [selectedMonth, setSelectedMonth] = useState(() => localStorage.getItem('selectedMonth') || 'All');
 
       useEffect(() => {
-        safeLocalStorage.setItem('registryFilter', registryFilter || '');
+        localStorage.setItem('activeTab', activeTab);
+      }, [activeTab]);
+
+      useEffect(() => {
+        localStorage.setItem('registryFilter', registryFilter || '');
       }, [registryFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
+        localStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
       }, [progressRangeFilter]);
 
       useEffect(() => {
-        safeLocalStorage.setItem('selectedMonths', JSON.stringify(selectedMonths || []));
-      }, [selectedMonths]);
+        localStorage.setItem('selectedMonth', selectedMonth || 'All');
+      }, [selectedMonth]);
 
       const [data, setData] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -2317,95 +2084,35 @@
       const parseMonthYear = (dateStr) => {
         if (!dateStr) return null;
         
-        let str = String(dateStr).trim().replace(/\s+/g, ' ');
-        if (!str || str.toLowerCase() === 'not specified' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') {
-          return null;
-        }
-
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const fullMonthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-
-        // Try to match wordy months first
-        // Example: "27-Nov-23" or "27-Nov-2023" or "27 Nov 2023" or "27-November-2023"
-        let normalizedStr = str.replace(/[-/]/g, ' ').toLowerCase();
-        let words = normalizedStr.split(' ');
-        
-        let foundMonthIndex = -1;
-        for (let i = 0; i < words.length; i++) {
-          const w = words[i];
-          const idxFull = fullMonthNames.indexOf(w);
-          if (idxFull !== -1) {
-            foundMonthIndex = idxFull;
-            break;
-          }
-          const idxShort = monthNames.map(m => m.toLowerCase()).indexOf(w.substring(0, 3));
-          if (idxShort !== -1 && w.length >= 3) {
-            foundMonthIndex = idxShort;
-            break;
-          }
-        }
-
-        if (foundMonthIndex !== -1) {
-          let year = null;
-          for (const w of words) {
-            if (/^\d{4}$/.test(w)) {
-              year = parseInt(w);
-              break;
-            }
-          }
-          if (year === null) {
-            for (const w of words) {
-              if (/^\d{2}$/.test(w) && !/^\d{4}$/.test(w)) {
-                const val = parseInt(w);
-                year = 2000 + val;
-                break;
-              }
-            }
-          }
-          if (year !== null) {
-            return {
-              label: `${monthNames[foundMonthIndex]}-${String(year).slice(-2)}`,
-              raw: `${year}-${String(foundMonthIndex + 1).padStart(2, '0')}`
-            };
-          }
-        }
-
-        // Match YYYY-MM-DD or YYYY/MM/DD
-        let matchISO = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (matchISO) {
-          const year = parseInt(matchISO[1]);
-          const month = parseInt(matchISO[2]) - 1;
+        const str = String(dateStr).trim();
+        // Match YYYY-MM-DD
+        let match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+          const year = parseInt(match[1]);
+          const month = parseInt(match[2]) - 1;
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
           if (month >= 0 && month < 12) {
-            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+        
+        // Match MM/DD/YYYY
+        let matchUS = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (matchUS) {
+          const year = parseInt(matchUS[3]);
+          const month = parseInt(matchUS[1]) - 1;
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          if (month >= 0 && month < 12) {
+            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
           }
         }
 
-        // Match numeric digits: DD/MM/YYYY, DD-MM-YYYY, MM/DD/YYYY, MM-DD-YYYY
-        let matchNumeric = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
-        if (matchNumeric) {
-          const num1 = parseInt(matchNumeric[1]);
-          const num2 = parseInt(matchNumeric[2]);
-          let year = parseInt(matchNumeric[3]);
-          if (year < 100) year += 2000;
-
-          if (num1 > 12 && num2 <= 12) {
-            const month = num2 - 1;
-            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
-          } else if (num2 > 12 && num1 <= 12) {
-            const month = num1 - 1;
-            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
-          } else if (num1 <= 12 && num2 <= 12) {
-            const month = num2 - 1;
-            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
-          }
-        }
-
-        // Native Date parser fallback
         const date = new Date(str);
         if (!isNaN(date.getTime())) {
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
           const year = date.getFullYear();
           const month = date.getMonth();
-          return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
         }
         
         return null;
@@ -2421,16 +2128,19 @@
         });
         
         const sortedKeys = Object.keys(monthsMap).sort((a, b) => a.localeCompare(b));
-        return sortedKeys.map(key => ({ value: key, label: monthsMap[key] }));
+        return [
+          { value: 'All', label: 'All Months' },
+          ...sortedKeys.map(key => ({ value: key, label: monthsMap[key] }))
+        ];
       }, [safeData]);
 
       const filteredData = useMemo(() => {
-        if (selectedMonths.length === 0) return safeData;
+        if (selectedMonth === 'All') return safeData;
         return safeData.filter(student => {
           const parsed = parseMonthYear(student.startedAt);
-          return parsed && selectedMonths.includes(parsed.raw);
+          return parsed && parsed.raw === selectedMonth;
         });
-      }, [safeData, selectedMonths]);
+      }, [safeData, selectedMonth]);
 
       const mockData = useMemo(() => [
         { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
@@ -2516,28 +2226,8 @@
                     gender: obj.gender || obj.sex || 'Not Specified',
                     category: obj.category || obj.socialcategory || 'General',
                     incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-                    startedAt: (() => {
-                      const dateKeys = ['startedat', 'registrationdate', 'timestamp', 'createdat', 'submissiondate', 'date', 'datetime', 'enrolledat', 'enrollmentdate', 'joiningdate', 'startingdate'];
-                      for (const dk of dateKeys) {
-                        if (obj[dk]) return obj[dk];
-                      }
-                      const fallbackKey = Object.keys(obj).find(k => 
-                        (k.includes('date') || k.includes('time') || k.endsWith('at') || k.startsWith('start')) && 
-                        !k.includes('completed')
-                      );
-                      return fallbackKey ? obj[fallbackKey] : '';
-                    })(),
-                    completedAt: (() => {
-                      const compDateKeys = ['completedat', 'completiondate', 'completed_at', 'finishdate', 'finishedat', 'completed'];
-                      for (const cdk of compDateKeys) {
-                        if (obj[cdk]) return obj[cdk];
-                      }
-                      const fallbackKey = Object.keys(obj).find(k => 
-                        (k.includes('date') || k.includes('time') || k.endsWith('at')) && 
-                        k.includes('completed')
-                      );
-                      return fallbackKey ? obj[fallbackKey] : '';
-                    })(),
+                    startedAt: obj.startedat || obj.registrationdate || '',
+                    completedAt: obj.completedat || obj.completiondate || '',
                     completedPercent: finalized ? 100 : completedValue
                   };
                 });
@@ -2643,6 +2333,28 @@
                 <LucideIcon name="users" className="w-3 h-3" /> Registry
               </button>
             </div>
+            
+            {/* Mobile Month Filter */}
+            <div className="p-3 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <LucideIcon name="calendar" className="w-3.5 h-3.5 text-brand-green" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Filter Month:</span>
+              </div>
+              <div className="relative min-w-[140px]">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full text-[10px] font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green rounded-lg py-1 px-3.5 pr-8 appearance-none focus:outline-none transition-all"
+                >
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+                  <LucideIcon name="chevron-down" className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
 
             <div className="flex overflow-x-auto no-scrollbar bg-slate-50 p-2 gap-2">
               <a href="https://pehel.medha.org.in/systemAdoption" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -2677,6 +2389,34 @@
                     <LucideIcon name="users" className="w-4 h-4" /> Registry
                   </button>
                 </nav>
+
+                {/* Desktop Month Filter */}
+                <div className="pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Month wise Filter</p>
+                        <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
+                      </div>
+                      <LucideIcon name="calendar" className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                    
+                    <div className="relative">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green/50 rounded-xl p-2.5 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                      >
+                        {monthOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <LucideIcon name="chevron-down" className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="pt-6 border-t border-slate-100">
                   <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
@@ -2741,27 +2481,24 @@
                   data={filteredData} 
                   lastSync={lastSync}
                   isLive={isLive}
-                  monthOptions={monthOptions}
-                  selectedMonths={selectedMonths}
-                  setSelectedMonths={setSelectedMonths}
                   onViewRegistry={(college) => {
-                    safeLocalStorage.setItem('filter_search', college);
-                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
-                    safeLocalStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
-                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
-                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
-                    safeLocalStorage.setItem('filter_currentPage', '1');
+                    localStorage.setItem('filter_search', college);
+                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    localStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
+                    localStorage.setItem('filter_division', JSON.stringify([]));
+                    localStorage.setItem('filter_college', JSON.stringify([]));
+                    localStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter(college);
                     setProgressRangeFilter('All');
                     setActiveTab('students');
                   }}
                   onViewProgressRegistry={(range) => {
-                    safeLocalStorage.setItem('filter_search', '');
-                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
-                    safeLocalStorage.setItem('filter_progress', JSON.stringify([range]));
-                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
-                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
-                    safeLocalStorage.setItem('filter_currentPage', '1');
+                    localStorage.setItem('filter_search', '');
+                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    localStorage.setItem('filter_progress', JSON.stringify([range]));
+                    localStorage.setItem('filter_division', JSON.stringify([]));
+                    localStorage.setItem('filter_college', JSON.stringify([]));
+                    localStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter('');
                     setProgressRangeFilter(range);
                     setActiveTab('students');
@@ -2774,9 +2511,6 @@
                   onSearchChange={setRegistryFilter}
                   initialProgressFilter={progressRangeFilter}
                   onProgressFilterChange={setProgressRangeFilter}
-                  monthOptions={monthOptions}
-                  selectedMonths={selectedMonths}
-                  setSelectedMonths={setSelectedMonths}
                 />
               )}
             </main>
