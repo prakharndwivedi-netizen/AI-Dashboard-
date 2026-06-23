@@ -1,162 +1,2797 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base target="_top">
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js"></script>
-  <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Dashboard</title>
+  
+  <!-- CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com" crossorigin></script>
+  <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.0/dist/react-apexcharts.iife.min.js" crossorigin></script>
+  <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js" crossorigin></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js" crossorigin></script>
+  
+  <script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      console.log('Global Error caught: ' + msg + ' at ' + lineNo + ':' + columnNo);
+      return false;
+    };
+  </script>
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <style>
-    body { background-color: #F2F2F2; font-family: sans-serif; margin: 0; }
-    .spinner { border: 4px solid rgba(0,0,0,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #31B89D; animation: spin 1s linear infinite; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #F2F2F2; 
+      color: #282828;
+      margin: 0;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    .geo-card { 
+      background: white;
+      border-radius: 0.75rem;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      padding: 1.5rem;
+    }
+
+    /* Custom Transitions */
+    .tab-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+    @keyframes progress {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .animate-progress {
+      animation: progress 1.5s infinite linear;
+    }
   </style>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#31B89D',
+            'brand-green': '#31B89D',
+            'brand-green-light': '#4FD3A8',
+            'brand-green-pale': '#B2FFE0',
+            'brand-orange': '#FF9700',
+            'brand-orange-light': '#FFB900',
+            'brand-orange-pale': '#FCE7B3',
+            'brand-dark': '#282828',
+            'brand-bg': '#F2F2F2',
+            accent: '#FF9700',
+            primary: '#31B89D',
+            warning: '#FFB900',
+            dark: '#282828',
+            light: '#F2F2F2'
+          }
+        }
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useMemo, useRef } = React;
+  <script>
+    if (window.Babel) {
+      Babel.registerPreset('custom-babel-preset', {
+        presets: [
+          [Babel.availablePresets['env'], {}],
+          [Babel.availablePresets['react'], { runtime: 'classic' }]
+        ]
+      });
+    }
+  </script>
 
-    // Stable Lucide Icon Component
-    const Icon = ({ name, size = 16, color = "currentColor" }) => {
-      const iconRef = useRef(null);
-      useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
+  <script type="text/babel" data-presets="custom-babel-preset">
+    const { useState, useMemo, useEffect, useRef } = React;
+
+    const safeLocalStorage = {
+      getItem(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          console.warn("Storage warning: Reading localStorage is blocked or unavailable.", e);
+          return null;
         }
-      }, [name]);
-      return <i data-lucide={name} style={{ width: size, height: size, color: color }}></i>;
+      },
+      setItem(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          console.warn("Storage warning: Writing to localStorage is blocked or unavailable.", e);
+        }
+      },
+      removeItem(key) {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.warn("Storage warning: Removing from localStorage is blocked or unavailable.", e);
+        }
+      }
     };
 
-    // Stable ApexChart Component
-    const PerformanceChart = ({ data }) => {
-      const chartRef = useRef(null);
-      useEffect(() => {
-        const completed = data.filter(d => d.status === 'Completed').length;
-        const pending = data.length - completed;
+    const getIconSvg = (name, className = "w-4 h-4") => {
+      try {
+        if (!name || typeof name !== 'string') return '';
+        if (!window.lucide || !window.lucide.icons) return '';
+        // Map kebab-case to PascalCase (e.g., 'map-pin' to 'MapPin', 'search' to 'Search')
+        const pascalName = name
+          .split('-')
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join('');
+        
+        // Try PascalCase first, then lowercase, then original string
+        const iconObj = window.lucide.icons[pascalName] || 
+                        window.lucide.icons[name.toLowerCase()] || 
+                        window.lucide.icons[name];
+                        
+        if (iconObj && typeof iconObj.toSVG === 'function') {
+          // Define default attributes to match the design style
+          const defaultAttrs = {
+            class: className,
+            width: '100%',
+            height: '100%',
+            'stroke-width': '2'
+          };
+          return iconObj.toSVG(defaultAttrs);
+        }
+      } catch (e) {
+        console.error("Error creating SVG icon:", name, e);
+      }
+      return '';
+    };
 
-        const options = {
-          chart: { type: 'donut', height: 300 },
-          series: [completed, pending],
-          labels: ['Completed', 'Pending'],
-          colors: ['#31B89D', '#FF9700'],
-          legend: { position: 'bottom' }
+    const LucideIcon = ({ name, className = "w-4 h-4", ...props }) => {
+      const [libLoaded, setLibLoaded] = useState(!!(window.lucide && window.lucide.icons));
+
+      useEffect(() => {
+        if (!libLoaded) {
+          const timer = setInterval(() => {
+            if (window.lucide && window.lucide.icons) {
+              setLibLoaded(true);
+              clearInterval(timer);
+            }
+          }, 100);
+          return () => clearInterval(timer);
+        }
+      }, [libLoaded]);
+
+      const svgString = useMemo(() => {
+        if (!libLoaded) return '';
+        return getIconSvg(name, className);
+      }, [name, className, libLoaded]);
+
+      if (!svgString) {
+        // Safe fallback - if Lucide library is not loaded yet, degrade gracefully
+        return <span className={`inline-block shrink-0 ${className} select-none`} data-lucide={name} {...props}></span>;
+      }
+
+      return (
+        <span 
+          className={`inline-flex items-center justify-center shrink-0 select-none cursor-inherit ${className}`}
+          dangerouslySetInnerHTML={{ __html: svgString }}
+          {...props}
+        />
+      );
+    };
+    
+    /**
+     * GITHUB HOSTING OPTIMIZATION:
+     * To host this on GitHub and pull live data from Google Sheets:
+     * 1. In your Google Sheet, go to File > Share > Publish to web.
+     * 2. Select 'Entire Document' and 'Comma-separated values (.csv)'.
+     * 3. Copy the link and paste it below in GOOGLE_SHEET_CSV_URL.
+     */
+    const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9DApK8KKyzzUcIJK_EbtPCyAYVOqYLndR5O9obqyZoVBJzt5Yr10LYhEkrUEIkUzucVNhBkF2srgh/pub?gid=493239070&single=true&output=csv"; 
+
+    // --- MANUAL APEX CHARTS BRIDGE ---
+    const Chart = (props) => {
+      const chartRef = React.useRef(null);
+      const chartInstance = React.useRef(null);
+      const [libFound, setLibFound] = useState(!!window.ApexCharts);
+
+      useEffect(() => {
+        if (!libFound) {
+          const interval = setInterval(() => {
+            if (window.ApexCharts) {
+              setLibFound(true);
+              clearInterval(interval);
+            }
+          }, 500);
+          return () => clearInterval(interval);
+        }
+      }, [libFound]);
+
+      useEffect(() => {
+        if (!libFound || !chartRef.current) return;
+
+        // Small delay to ensure container is fully sized
+        const timeout = setTimeout(() => {
+          if (!chartRef.current) return; // Guard against unmounting
+          
+          if (chartInstance.current) {
+            try {
+              chartInstance.current.destroy();
+            } catch (e) {
+              console.warn("ApexCharts destroy failed", e);
+            }
+          }
+
+          const config = {
+            ...props.options,
+            series: props.series,
+            chart: {
+              ...props.options.chart,
+              type: props.type || 'line',
+              height: props.height || 'auto',
+              animations: { enabled: true }
+            }
+          };
+
+          try {
+            chartInstance.current = new window.ApexCharts(chartRef.current, config);
+            chartInstance.current.render();
+          } catch (e) {
+            console.error("ApexCharts render failed", e);
+          }
+        }, 100);
+
+        return () => {
+          clearTimeout(timeout);
+          if (chartInstance.current) {
+            try {
+              chartInstance.current.destroy();
+            } catch (e) {
+              console.warn("ApexCharts cleanup destroy failed", e);
+            }
+            chartInstance.current = null;
+          }
         };
+      }, [libFound, props.options, props.series, props.type, props.height]);
 
-        const chart = new ApexCharts(chartRef.current, options);
-        chart.render();
-        return () => chart.destroy();
-      }, [data]);
-
-      return <div ref={chartRef}></div>;
-    };
-
-    const App = () => {
-      const [data, setData] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [view, setView] = useState('dashboard');
-
-      useEffect(() => {
-        // Fetch from Google Script
-        if (typeof google !== 'undefined') {
-          google.script.run
-            .withSuccessHandler((res) => {
-              setData(res);
-              setLoading(false);
-            })
-            .withFailureHandler(() => {
-              console.error("Failed to fetch data");
-              setLoading(false);
-            })
-            .getSpreadsheetData();
-        } else {
-          // Local Testing Data
-          setData([{ firstName: "Demo", lastName: "User", college: "Testing ITI", trade: "Electrician", status: "Completed", division: "Patna", completedPercent: 100 }]);
-          setLoading(false);
-        }
-      }, []);
-
-      if (loading) {
+      if (!libFound) {
         return (
-          <div className="flex flex-col items-center justify-center h-screen">
-            <div className="spinner"></div>
-            <p className="mt-4 text-sm font-bold text-gray-500 uppercase tracking-widest">Loading Analytics...</p>
+          <div className="h-full w-full bg-slate-50 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-lg p-4">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading Graphics...</span>
           </div>
         );
       }
 
-      return (
-        <div className="min-h-screen flex flex-col">
-          <nav className="bg-white border-b p-4 flex justify-between items-center shadow-sm">
-            <h1 className="text-xl font-black text-gray-800 tracking-tighter uppercase">Student <span className="text-brand-green text-[#31B89D]">AI Portal</span></h1>
-            <div className="flex gap-2">
-              <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${view === 'dashboard' ? 'bg-[#31B89D] text-white' : 'bg-gray-100 text-gray-500'}`}>Dashboard</button>
-              <button onClick={() => setView('registry')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${view === 'registry' ? 'bg-[#31B89D] text-white' : 'bg-gray-100 text-gray-500'}`}>Registry</button>
-            </div>
-          </nav>
+      return <div ref={chartRef} className="w-full h-full" />;
+    };
 
-          <main className="p-6 max-w-6xl mx-auto w-full flex-1">
-            {view === 'dashboard' ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-1 bg-white p-6 rounded-2xl border shadow-sm flex flex-col items-center">
-                  <h3 className="text-xs font-black uppercase text-gray-400 mb-4">Completion Status</h3>
-                  <PerformanceChart data={data} />
+    // --- UTILITIES ---
+    const isMatch = (collegeName, searchQuery) => {
+      if (!searchQuery) return true;
+      const target = String(collegeName || '').toLowerCase().trim();
+      const query = String(searchQuery || '').toLowerCase().trim();
+      if (!query) return true;
+
+      // Define a normalization function for abbreviation translation
+      const normalizeAbbreviations = (text) => {
+        let t = text;
+        
+        // Replace forms of government/govt iti with giti
+        t = t.replace(/\bgovernment\s+iti\b/g, 'giti');
+        t = t.replace(/\bgovt\s+iti\b/g, 'giti');
+        t = t.replace(/\bgov\s+iti\b/g, 'giti');
+        // Replace isolated terms so that "govt iti" search query works
+        t = t.replace(/\bgovernment\b/g, 'giti');
+        t = t.replace(/\bgovt\b/g, 'giti');
+        t = t.replace(/\bgov\b/g, 'giti');
+        
+        // Replace forms of womens/women's iti with witi
+        t = t.replace(/\bwomen\'s\s+iti\b/g, 'witi');
+        t = t.replace(/\bwomens\s+iti\b/g, 'witi');
+        t = t.replace(/\bwomen\s+iti\b/g, 'witi');
+        t = t.replace(/\bwomen\'s\b/g, 'witi');
+        t = t.replace(/\bwomens\b/g, 'witi');
+        t = t.replace(/\bwomen\b/g, 'witi');
+        
+        // Clean special characters and multiple spaces
+        t = t.replace(/[^a-z0-9\s]/g, ' ');
+        t = t.replace(/\s+/g, ' ').trim();
+        return t;
+      };
+
+      const normTarget = normalizeAbbreviations(target);
+      const normQuery = normalizeAbbreviations(query);
+
+      // 1. Direct contains check on normalized text
+      if (normTarget.includes(normQuery)) return true;
+
+      // 2. Word-by-word fuzzy spelling tolerance check
+      const targetWords = normTarget.split(' ').filter(Boolean);
+      const queryWords = normQuery.split(' ').filter(Boolean);
+
+      if (queryWords.length === 0) return true;
+
+      // Simple Levenshtein distance
+      const getLevenshteinDistance = (a, b) => {
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+          for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+              matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+              matrix[i][j] = Math.min(
+                matrix[i - 1][j - 1] + 1, // substitution
+                matrix[i][j - 1] + 1,     // insertion
+                matrix[i - 1][j] + 1      // deletion
+              );
+            }
+          }
+        }
+        return matrix[b.length][a.length];
+      };
+
+      const isWordClose = (qw, tw) => {
+        if (tw.includes(qw)) return true;
+        if (qw.includes(tw)) return true;
+        
+        if (qw.length < 3) return qw === tw;
+        const maxDist = qw.length <= 4 ? 1 : 2;
+        return getLevenshteinDistance(qw, tw) <= maxDist;
+      };
+
+      // Ensure every word in query matches at least one word in target
+      return queryWords.every(qw => targetWords.some(tw => isWordClose(qw, tw)));
+    };
+
+    const getAggregatedMetrics = (records) => {
+      const registrations = records.length;
+      
+      const isCompleted = (r) => {
+        const val = parseFloat(r.completedPercent);
+        return (!isNaN(val) && val >= 100) || r.status === 'Completed';
+      };
+
+      const completions = records.filter(isCompleted).length;
+      
+      const muzRecords = records.filter(r => String(r.division || '').toLowerCase().includes('muzaffarpur'));
+      const muzTotal = muzRecords.length;
+      const muzCompleted = muzRecords.filter(isCompleted).length;
+
+      const patnaRecords = records.filter(r => String(r.division || '').toLowerCase().includes('patna'));
+      const patnaTotal = patnaRecords.length;
+      const patnaCompleted = patnaRecords.filter(isCompleted).length;
+
+      // Last 30 Days Logic
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentRegs = records.filter(r => {
+        if (!r.startedAt) return false;
+        const d = new Date(r.startedAt);
+        return d >= thirtyDaysAgo;
+      }).length;
+
+      const recentComps = records.filter(r => {
+        if (!r.completedAt) return false;
+        const d = new Date(r.completedAt);
+        return d >= thirtyDaysAgo && r.completedPercent >= 100;
+      }).length;
+
+      return {
+        registrations,
+        completions,
+        muzProgress: `${muzCompleted} / ${muzTotal}`,
+        patnaProgress: `${patnaCompleted} / ${patnaTotal}`,
+        recentRegs,
+        recentComps,
+        stability: "100%",
+        hasData: records.length > 0
+      };
+    };
+
+    const getDistribution = (records, field) => {
+      const counts = {};
+      records.forEach(r => {
+        let val = String(r[field] || '').trim();
+        // Skip placeholders but allow meaningful data
+        if (!val || ['n/a', 'unknown', 'undefined', 'unassigned', 'not specified'].includes(val.toLowerCase())) return;
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      
+      const result = Object.entries(counts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+      
+      return result.length > 0 ? result : [{ name: 'No Specific Data', value: 0 }];
+    };
+
+    const getCollegeMetrics = (records) => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const colleges = {};
+      records.forEach(r => {
+        const name = r.college || 'N/A';
+        if (!colleges[name]) colleges[name] = { registrations: 0, completions: 0, recentCompletions: 0 };
+        
+        colleges[name].registrations++;
+        const pComp = parseFloat(r.completedPercent);
+        const isComp = (!isNaN(pComp) && pComp >= 100) || r.status === 'Completed';
+        if (isComp) {
+          colleges[name].completions++;
+          
+          if (r.completedAt) {
+            const compDate = new Date(r.completedAt);
+            if (compDate >= thirtyDaysAgo) {
+              colleges[name].recentCompletions++;
+            }
+          }
+        }
+      });
+      
+      return Object.entries(colleges)
+        .map(([name, stats]) => ({ 
+          name, 
+          ...stats, 
+          efficiency: stats.registrations > 0 ? ((stats.completions / stats.registrations) * 100).toFixed(1) : "0.0"
+        }))
+        .sort((a, b) => b.registrations - a.registrations);
+    };
+
+    const getRecentPerformance = (records) => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const stats = {};
+      records.filter(r => r.startedAt || r.completedAt).forEach(r => {
+        const regDate = r.startedAt ? new Date(r.startedAt) : null;
+        const compPercent = parseFloat(r.completedPercent) || 0;
+        const compDate = (r.completedAt && compPercent >= 100) ? new Date(r.completedAt) : null;
+        
+        const college = r.college || 'N/A';
+        if (!stats[college]) stats[college] = { newRegs: 0, newComps: 0 };
+        
+        if (regDate && regDate >= thirtyDaysAgo) stats[college].newRegs++;
+        if (compDate && compDate >= thirtyDaysAgo) stats[college].newComps++;
+      });
+      
+      return Object.entries(stats)
+        .map(([name, val]) => ({ name, ...val }))
+        .sort((a, b) => b.newRegs - a.newRegs);
+    };
+
+    const maskSensitive = (val) => {
+      if (!val) return val;
+      const str = String(val).trim();
+      if (str.includes('@')) {
+        // Email masking
+        try {
+          const [username, domain] = str.split('@');
+          if (username.length <= 2) return str;
+          const first = username[0];
+          const last = username[username.length - 1];
+          const maskedContent = "*".repeat(username.length - 2);
+          return `${first}${maskedContent}${last}@${domain}`;
+        } catch (e) {
+          return str;
+        }
+      } else {
+        // Phone masking (assuming numeric-like)
+        const digits = str.replace(/\D/g, '');
+        if (digits.length < 5) return str; // Too short to mask meaningfully
+        const first = str[0];
+        const last = str[str.length - 1];
+        const maskedContent = "*".repeat(str.length - 2);
+        return `${first}${maskedContent}${last}`;
+      }
+    };
+
+    const maskEmail = maskSensitive; // Alias for backward compatibility
+
+    const GOALS_MOCK = [
+      { institution: "ITI Narkatiyaganj", totalAdmissions: 200, registered: 180, totalCompleted: 150 },
+      { institution: "ITI Jhanjharpur", totalAdmissions: 150, registered: 140, totalCompleted: 110 },
+      { institution: "WITI Muzaffarpur", totalAdmissions: 100, registered: 95, totalCompleted: 90 },
+      { institution: "ITI Hajipur", totalAdmissions: 180, registered: 160, totalCompleted: 130 },
+      { institution: "ITI Hathwa", totalAdmissions: 120, registered: 110, totalCompleted: 80 },
+    ];
+
+    // --- COMPONENTS ---
+
+    const MetricCard = ({ title, value, icon, variant = 'green' }) => (
+      <div className={`w-full overflow-hidden relative group h-[110px] rounded-2xl border-2 transition-all hover:shadow-xl hover:-translate-y-1 cursor-default ${
+        variant === 'green' 
+          ? 'bg-white border-brand-green/20 hover:border-brand-green/40' 
+          : 'bg-white border-brand-orange/20 hover:border-brand-orange/40'
+      }`}>
+        <div className={`absolute top-0 right-0 w-24 h-24 blur-2xl rounded-full opacity-10 transition-opacity group-hover:opacity-20 ${
+          variant === 'green' ? 'bg-brand-green' : 'bg-brand-orange'
+        }`}></div>
+        
+        <div className="relative p-5 h-full flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <h1 className={`text-[10px] font-black uppercase tracking-[0.15em] ${variant === 'green' ? 'text-brand-green' : 'text-brand-orange'}`}>{title}</h1>
+            <div className={`p-2 rounded-xl ${variant === 'green' ? 'bg-brand-green/10' : 'bg-brand-orange/10'}`}>
+              <i data-lucide={icon} className={`w-4 h-4 ${variant === 'green' ? 'text-brand-green' : 'text-brand-orange'}`}></i>
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl font-black text-brand-dark tracking-tighter">{value}</h2>
+          </div>
+        </div>
+      </div>
+    );
+
+    const MonthMultiSelect = ({ options, selectedValues = [], onChange }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const dropdownRef = useRef(null);
+
+      const safeSelectedValues = useMemo(() => Array.isArray(selectedValues) ? selectedValues : [], [selectedValues]);
+      const safeOptions = useMemo(() => Array.isArray(options) ? options : [], [options]);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            setIsOpen(false);
+          }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+      }, []);
+
+      const displayLabel = useMemo(() => {
+        if (safeSelectedValues.length === 0) return "All Months";
+        if (safeSelectedValues.length === safeOptions.length) return "All Months";
+        if (safeSelectedValues.length === 1) {
+          const matched = safeOptions.find(o => o.value === safeSelectedValues[0]);
+          return matched ? matched.label : safeSelectedValues[0];
+        }
+        return `${safeSelectedValues.length} Months`;
+      }, [safeSelectedValues, safeOptions]);
+
+      return (
+        <div className="relative w-full" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full h-[38px] flex items-center justify-between text-[10px] font-black uppercase text-slate-700 bg-white border border-slate-200 hover:border-brand-green/35 rounded-xl px-4 py-2.5 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+          >
+            <span className="truncate max-w-[150px]">{displayLabel}</span>
+            <LucideIcon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {isOpen && (
+            <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase rounded-lg text-slate-700 hover:bg-slate-50 justify-between transition-colors"
+              >
+                <span>All Months</span>
+                {safeSelectedValues.length === 0 && <LucideIcon name="check" className="w-3.5 h-3.5 text-brand-green stroke-[3px]" />}
+              </button>
+              
+              <div className="h-px bg-slate-100 my-1"></div>
+              
+              {safeOptions.map(opt => {
+                const isChecked = safeSelectedValues.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      if (isChecked) {
+                        onChange(safeSelectedValues.filter(val => val !== opt.value));
+                      } else {
+                        onChange([...safeSelectedValues, opt.value]);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase rounded-lg text-slate-700 hover:bg-slate-50 justify-between transition-colors"
+                  >
+                    <span className="truncate">{opt.label}</span>
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-green border-brand-green text-white' : 'border-slate-300'}`}>
+                      {isChecked && <LucideIcon name="check" className="w-3 h-3 text-white stroke-[3px]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const Dashboard = ({ data, onViewRegistry, onViewProgressRegistry, lastSync, isLive, monthOptions, selectedMonths, setSelectedMonths }) => {
+      const [selectedDivision, setSelectedDivision] = useState('All');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [reportSearch, setReportSearch] = useState('');
+      const [reportCollege, setReportCollege] = useState(null);
+      const [showSuggestions, setShowSuggestions] = useState(false);
+
+      const searchContainerRef = useRef(null);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+            setShowSuggestions(false);
+          }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      const divisions = useMemo(() => {
+        const unique = Array.from(new Set(data.filter(d => d.division).map(d => d.division)));
+        return ['All', ...unique.sort()];
+      }, [data]);
+
+      const uniqueColleges = useMemo(() => {
+        return Array.from(new Set(data.map(d => d.college).filter(Boolean)));
+      }, [data]);
+
+      const suggestions = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        const matches = uniqueColleges.filter(colName => {
+          if (colName.toLowerCase() === searchQuery.toLowerCase().trim()) return false;
+          return isMatch(colName, searchQuery);
+        });
+        return matches.slice(0, 5);
+      }, [uniqueColleges, searchQuery]);
+
+      const filteredData = useMemo(() => {
+        return data.filter(record => {
+          const matchDivision = selectedDivision === 'All' || record.division === selectedDivision;
+          const matchSearch = isMatch(record.college, searchQuery);
+          return matchDivision && matchSearch;
+        });
+      }, [data, selectedDivision, searchQuery]);
+
+      const metrics = useMemo(() => getAggregatedMetrics(filteredData), [filteredData]);
+      const collegeMetrics = useMemo(() => getCollegeMetrics(filteredData), [filteredData]);
+      
+      const filteredReportMetrics = useMemo(() => {
+        return collegeMetrics.filter(col => 
+          col.name.toLowerCase().includes(reportSearch.toLowerCase())
+        );
+      }, [collegeMetrics, reportSearch]);
+
+      const top10Colleges = useMemo(() => {
+        return [...collegeMetrics]
+          .sort((a, b) => b.completions - a.completions)
+          .slice(0, 10);
+      }, [collegeMetrics]);
+
+      const bottom10Colleges = useMemo(() => {
+        return collegeMetrics
+          .filter(c => {
+            const eff = parseFloat(c.efficiency);
+            // Include only colleges with actual registration counts and low efficiency
+            return c.registrations > 0 && eff >= 0 && eff <= 50;
+          })
+          .sort((a, b) => {
+            const effA = parseFloat(a.efficiency);
+            const effB = parseFloat(b.efficiency);
+            if (effA !== effB) {
+              return effA - effB; // Worst performing first
+            }
+            return b.registrations - a.registrations; // If same efficiency, show larger student body first
+          })
+          .slice(0, 10);
+      }, [collegeMetrics]);
+
+      const recentPerformance = useMemo(() => getRecentPerformance(filteredData), [filteredData]);
+
+      // NEW COMPLETIONS-FOCUSED INSIGHTS DISTRIBUTIONS
+      const tradeCompletions = useMemo(() => {
+        const trades = {};
+        filteredData.forEach(r => {
+          const trade = r.trade || 'Other';
+          if (!trades[trade]) {
+            trades[trade] = { registrations: 0, completions: 0 };
+          }
+          trades[trade].registrations++;
+          const pComp = parseFloat(r.completedPercent);
+          const isComp = (!isNaN(pComp) && pComp >= 100) || r.status === 'Completed';
+          if (isComp) {
+            trades[trade].completions++;
+          }
+        });
+
+        return Object.entries(trades)
+          .map(([name, stats]) => {
+            const rate = stats.registrations > 0 ? (stats.completions / stats.registrations) * 100 : 0;
+            return { name, ...stats, rate: parseFloat(rate.toFixed(1)) };
+          })
+          .filter(t => t.registrations > 0)
+          .sort((a, b) => b.rate - a.rate || b.registrations - a.registrations)
+          .slice(0, 6); // Top 6 trades
+      }, [filteredData]);
+
+      const districtCompletions = useMemo(() => {
+        const districts = {};
+        filteredData.forEach(r => {
+          const dist = r.district || 'Unassigned';
+          if (!districts[dist]) {
+            districts[dist] = { registrations: 0, completions: 0 };
+          }
+          districts[dist].registrations++;
+          const pComp = parseFloat(r.completedPercent);
+          const isComp = (!isNaN(pComp) && pComp >= 100) || r.status === 'Completed';
+          if (isComp) {
+            districts[dist].completions++;
+          }
+        });
+
+        return Object.entries(districts)
+          .map(([name, stats]) => ({
+            name,
+            ...stats
+          }))
+          .filter(d => d.completions > 0)
+          .sort((a, b) => b.completions - a.completions)
+          .slice(0, 6); // Top 6 districts
+      }, [filteredData]);
+
+      const completionTimeline = useMemo(() => {
+        const monthCounts = {};
+        filteredData.forEach(r => {
+          const pComp = parseFloat(r.completedPercent);
+          const isComp = (!isNaN(pComp) && pComp >= 100) || r.status === 'Completed';
+          if (isComp && r.completedAt) {
+            try {
+              const d = new Date(r.completedAt);
+              if (!isNaN(d.getTime())) {
+                const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                monthCounts[label] = (monthCounts[label] || 0) + 1;
+              }
+            } catch (e) {
+              // Ignore invalid dates
+            }
+          }
+        });
+
+        return Object.entries(monthCounts)
+          .map(([month, count]) => {
+            const parseDate = new Date(month);
+            return { month, count, sortTime: parseDate.getTime() || 0 };
+          })
+          .sort((a, b) => a.sortTime - b.sortTime)
+          .map(({ month, count }) => ({ name: month, count }));
+      }, [filteredData]);
+
+      // Progress range with new bifurcation levels: 0%, 1%-50%, 51%-70%, 71%-99%, 100%
+      const completedDistribution = useMemo(() => {
+        let countZero = 0;
+        let countLow = 0;   // 1%-50%
+        let countMid = 0;   // 51%-70%
+        let countHigh = 0;  // 71%-99%
+        let countCompleted = 0; // 100%
+
+        filteredData.forEach(r => {
+          let pComp = parseFloat(r.completedPercent);
+          if (isNaN(pComp)) {
+            pComp = r.status === 'Completed' ? 100 : 0;
+          }
+          if (pComp === 0) {
+            countZero++;
+          } else if (pComp > 0 && pComp <= 50) {
+            countLow++;
+          } else if (pComp > 50 && pComp <= 70) {
+            countMid++;
+          } else if (pComp > 70 && pComp < 100) {
+            countHigh++;
+          } else {
+            countCompleted++;
+          }
+        });
+
+        return [
+          { name: '0% Completed', value: countZero },
+          { name: '1%-50% Completed', value: countLow },
+          { name: '51%-70% Completed', value: countMid },
+          { name: '71%-99% Completed', value: countHigh },
+          { name: '100% Completed', value: countCompleted }
+        ];
+      }, [filteredData]);
+
+      const CHART_COLORS = ['#31B89D', '#FF9700', '#FCE7B3', '#FFB900', '#4FD3A8', '#FCE7B3'];
+
+      const commonOptions = {
+        chart: { toolbar: { show: false }, zoom: { enabled: false } },
+        colors: CHART_COLORS,
+        legend: { position: 'bottom', fontSize: '10px', labels: { colors: '#31B89D' } },
+        dataLabels: { enabled: false },
+        tooltip: {
+          theme: 'light',
+          style: { fontSize: '12px', fontFamily: 'Inter' }
+        }
+      };
+
+      const areaOptions = {
+        ...commonOptions,
+        stroke: { curve: 'smooth', width: 3 },
+        fill: { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.05 } },
+        xaxis: { labels: { style: { colors: '#31B89D', fontSize: '9px', fontWeight: 700 } } },
+        yaxis: { labels: { style: { colors: '#FF9700', fontWeight: 700 } } },
+        markers: { size: 5, strokeWidth: 3, hover: { size: 7 } }
+      };
+
+      // Removed raw lucide createIcons effect to prevent virtual DOM collisions
+
+      return (
+        <div className="space-y-8 max-w-[1700px] mx-auto pb-12">
+          {/* Header Progress Bar */}
+          <div className="bg-white p-6 rounded-2xl flex flex-col lg:flex-row gap-6 items-center shadow-lg border-l-[12px] border-brand-orange">
+            <div className="w-full lg:w-1/3">
+              <h2 className="text-brand-dark text-xl font-black uppercase tracking-tighter">Live Dataset Analytics</h2>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-brand-green text-[10px] font-bold uppercase tracking-widest opacity-70">Real-time performance distribution</p>
+                {metrics.hasData && (
+                  <span className={`flex items-center gap-1 ${isLive ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'} px-2 py-0.5 rounded text-[8px] font-bold uppercase`}>
+                    {isLive ? 'Live Sync Active' : 'Offline / Demo Mode'}
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex-1 flex flex-col md:flex-row gap-4 items-center justify-center w-full">
+              <select 
+                className="w-full md:w-auto bg-brand-bg border border-slate-200 text-xs font-black uppercase text-brand-dark rounded-xl px-6 py-3 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                value={selectedDivision}
+                onChange={(e) => setSelectedDivision(e.target.value)}
+              >
+                {divisions.map(d => <option key={d} value={d} className="bg-white">{d}</option>)}
+              </select>
+
+              <div className="w-full md:w-48 shrink-0">
+                <MonthMultiSelect 
+                  options={monthOptions}
+                  selectedValues={selectedMonths}
+                  onChange={setSelectedMonths}
+                />
+              </div>
+
+              <div 
+                ref={searchContainerRef}
+                className="relative w-full md:w-96"
+              >
+                <LucideIcon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  placeholder="Scan Colleges..."
+                  className="w-full pl-12 pr-4 py-3 bg-brand-bg border border-slate-200 rounded-xl text-xs font-bold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all inline-block"
+                  value={searchQuery}
+                  onFocus={() => setShowSuggestions(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                />
+                
+                {/* Floating Autocomplete Suggestions Panel */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden text-[11px] font-bold text-brand-dark">
+                    <div className="bg-slate-50 px-4 py-2 text-[8.5px] uppercase tracking-wider text-slate-400 border-b border-slate-100 font-extrabold">
+                      Suggested Colleges
+                    </div>
+                    <ul className="divide-y divide-slate-100 max-h-[220px] overflow-y-auto no-scrollbar">
+                      {suggestions.map((sug, idx) => (
+                        <li 
+                          key={idx}
+                          className="px-4 py-3 hover:bg-brand-green/5 hover:text-brand-green cursor-pointer transition-colors flex items-center gap-2 text-left"
+                          onClick={() => {
+                            setSearchQuery(sug);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          <LucideIcon name="building" className="w-3.5 h-3.5 text-brand-green opacity-70" />
+                          <span className="truncate">{sug}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="w-full lg:w-1/3 flex justify-center lg:justify-end">
+              {lastSync && (
+                <div className="flex flex-col items-center lg:items-end">
+                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">System Last Synced</span>
+                  <span className="text-[10px] font-black text-brand-green bg-brand-green/5 px-2 py-1 rounded mt-1">{lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Core Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <MetricCard title="Total Registrations" value={metrics.registrations} icon="users" variant="green" />
+            <MetricCard title="Completed Cases" value={metrics.completions} icon="check-circle" variant="green" />
+            <MetricCard title="Muzaffarpur Zone" value={metrics.muzProgress} icon="map-pin" variant="orange" />
+            <MetricCard title="Patna Zone" value={metrics.patnaProgress} icon="trending-up" variant="orange" />
+            
+            <div className="w-full h-[110px] bg-gradient-to-br from-brand-orange to-brand-orange-light rounded-2xl shadow-lg p-5 flex flex-col justify-between transition-all hover:shadow-brand-orange/30 hover:-translate-y-1 cursor-default group border-2 border-brand-orange">
+               <div className="flex justify-between items-start">
+                 <h1 className="text-[10px] font-black text-white uppercase tracking-wider">30D Comp Success</h1>
+                 <div className="p-2 rounded-xl bg-white/20 group-hover:bg-white/30 transition-colors">
+                   <LucideIcon name="trending-up" className="w-4 h-4 text-white" />
+                 </div>
+               </div>
+               <div className="flex items-baseline justify-between">
+                 <h2 className="text-3xl font-black text-white tracking-tighter">+{metrics.recentComps}</h2>
+                 <span className="text-[8px] font-bold text-white/80 uppercase">Finalized</span>
+               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-8">
+            {/* College Performance Analysis */}
+            <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Top 10 Colleges */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
+                      <LucideIcon name="award" className="w-4 h-4 text-brand-green" />
+                      Top 10 Colleges (Completions)
+                    </h3>
+                  </div>
+                  <div className="h-[350px] p-4 col-chart-container">
+                    <Chart 
+                      type="bar" 
+                      height="100%" 
+                      series={[
+                        { name: 'Registrations', data: top10Colleges.map(c => c.registrations) },
+                        { name: 'Completions', data: top10Colleges.map(c => c.completions) }
+                      ]}
+                      options={{
+                        ...commonOptions,
+                        plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+                        xaxis: { 
+                          categories: top10Colleges.map(c => c.name.length > 20 ? c.name.substring(0, 17) + '...' : c.name), 
+                          labels: { style: { fontSize: '8px', fontWeight: 900 } } 
+                        },
+                        colors: ['#4FD3A8', '#31B89D'],
+                        legend: {
+                          show: true,
+                          position: 'bottom',
+                          fontSize: '10px',
+                          labels: { colors: '#282828' }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom 10 Colleges (0-50% Efficiency) */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange flex items-center gap-2">
+                      <LucideIcon name="alert-circle" className="w-4 h-4 text-brand-orange" />
+                      Critical Watch: Bottom 10 (0-50% Eff.)
+                    </h3>
+                  </div>
+                  <div className="h-[350px] p-4 col-chart-container">
+                    {bottom10Colleges.length > 0 ? (
+                      <Chart 
+                        type="bar" 
+                        height="100%" 
+                        series={[
+                          { name: 'Registrations', data: bottom10Colleges.map(c => c.registrations) },
+                          { name: 'Completions', data: bottom10Colleges.map(c => c.completions) }
+                        ]}
+                        options={{
+                          ...commonOptions,
+                          plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+                          xaxis: { 
+                            categories: bottom10Colleges.map(c => c.name.length > 20 ? c.name.substring(0, 17) + '...' : c.name), 
+                            labels: { style: { fontSize: '8px', fontWeight: 900 } } 
+                          },
+                          colors: ['#FFB900', '#FF9700'],
+                          legend: {
+                            show: true,
+                            position: 'bottom',
+                            fontSize: '10px',
+                            labels: { colors: '#282828' }
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-slate-400 font-bold text-[10px] uppercase">No Colleges in 0-50% Range</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Insight Analysis Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* 1. Progress Range Chart (updated ranges) */}
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-[#31B89D] mb-1 text-center flex items-center justify-center gap-2">
+                     <LucideIcon name="pie-chart" className="w-4 h-4 text-[#31B89D]" />
+                     Progress Range (% Completed)
+                   </h3>
+                   <p className="text-[8px] text-center font-extrabold text-brand-orange uppercase tracking-widest mb-5">Click a slice below to filter registry</p>
+                    <div className="h-[280px]">
+                      <Chart 
+                        options={{
+                          ...commonOptions, 
+                          chart: {
+                            toolbar: { show: false },
+                            zoom: { enabled: false },
+                            events: {
+                              dataPointSelection: (event, chartContext, config) => {
+                                const idx = config.dataPointIndex;
+                                if (idx !== undefined && idx !== null && completedDistribution[idx]) {
+                                  if (onViewProgressRegistry) {
+                                    onViewProgressRegistry(completedDistribution[idx].name);
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          labels: completedDistribution.map(d => d.name),
+                          colors: ['#EF4444', '#FF9700', '#FFB900', '#4FD3A8', '#31B89D'],
+                          legend: {
+                            show: true,
+                            position: 'bottom',
+                            fontSize: '10px',
+                            labels: { colors: '#282828' }
+                          }
+                        }} 
+                        series={completedDistribution.map(d => d.value)} 
+                        type="donut" 
+                        height="100%" 
+                      />
+                    </div>
+                 </div>
+
+                 {/* 2. Completions Timeline Trend Over Time */}
+                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange mb-6 text-center flex items-center justify-center gap-2">
+                      <LucideIcon name="trending-up" className="w-4 h-4 text-brand-orange" />
+                      Completed Students Timeline Trend
+                    </h3>
+                    <div className="h-[280px]">
+                      {completionTimeline.length > 0 ? (
+                        <Chart 
+                          options={{
+                            ...areaOptions,
+                            xaxis: { 
+                              categories: completionTimeline.map(d => d.name),
+                              labels: { style: { fontSize: '9px', fontWeight: 700 } } 
+                            },
+                            colors: ['#31B89D']
+                          }} 
+                          series={[{ name: 'Registrations Completed', data: completionTimeline.map(d => d.count) }]} 
+                          type="area" 
+                          height="100%" 
+                        />
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-slate-400 font-bold text-[10px] uppercase">No Completion Dates Logged</div>
+                      )}
+                    </div>
+                 </div>
+              </div>
+            </div>
+
+            {/* Side Reports Panel */}
+            <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
+                <div className="p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
+                    <LucideIcon name="file-text" className="w-4 h-4 text-brand-green" />
+                    Performance Reports
+                  </h3>
+                  <div className="relative">
+                    <LucideIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                    <input 
+                      type="text"
+                      placeholder="Find College..."
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold outline-none focus:ring-2 focus:ring-brand/20 transition-all"
+                      value={reportSearch}
+                      onChange={(e) => setReportSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[1050px] p-2 space-y-3 no-scrollbar mt-2">
+                  {filteredReportMetrics.length > 0 ? filteredReportMetrics.map((col, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden ${
+                        parseFloat(col.efficiency) > 70 
+                          ? 'bg-brand-green/5 border-brand-green/20 hover:border-brand-green hover:shadow-brand-green/10' 
+                          : 'bg-brand-orange/5 border-brand-orange/20 hover:border-brand-orange hover:shadow-brand-orange/10 shadow-sm'
+                      }`}
+                      onClick={() => setReportCollege(col.name)}
+                    >
+                      <div className="absolute top-0 left-0 w-1 h-full bg-brand-green opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="flex justify-between items-start mb-3 relative z-10">
+                        <span className="text-[11px] font-black text-brand-dark group-hover:text-brand-green transition-colors uppercase truncate w-40">{col.name}</span>
+                        <span className={`text-[9px] font-black py-1 px-2 rounded-lg transition-colors ${
+                          parseFloat(col.efficiency) > 70 ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'
+                        }`}>
+                          {col.efficiency}% EFF
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mt-2 relative z-10">
+                        <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Registrations</span>
+                          <span className="text-[12px] font-black text-brand-dark">{col.registrations}</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Completions</span>
+                          <span className={`text-[12px] font-black ${parseFloat(col.efficiency) > 70 ? 'text-brand-green' : 'text-brand-orange'}`}>{col.completions}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="p-8 text-center text-[10px] font-black uppercase text-slate-400 tracking-widest italic border-2 border-dashed border-slate-100 rounded-xl m-2">
+                      No Matches Found
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Performance Modal */}
+          {reportCollege && (
+            <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+              <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+                <div className="bg-brand-orange text-white p-8 text-white flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">{reportCollege}</h2>
+                    <p className="text-brand-green-pale text-[10px] font-bold uppercase tracking-widest mt-1">Detailed Performance Blueprint</p>
+                  </div>
+                  <button 
+                    onClick={() => setReportCollege(null)}
+                    className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all"
+                  >
+                    <LucideIcon name="x" className="w-6 h-6" />
+                  </button>
+                </div>
+                <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh]">
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Lifetime Admissions</p>
+                      <h4 className="text-3xl font-black text-dark">{data.filter(d => d.college === reportCollege).length}</h4>
+                    </div>
+                    <div className="bg-brand/5 p-6 rounded-2xl border border-brand/20">
+                      <p className="text-[9px] font-black text-brand uppercase tracking-widest mb-1">Final Completions</p>
+                      <h4 className="text-3xl font-black text-brand">{data.filter(d => d.college === reportCollege && d.completedPercent >= 100).length}</h4>
+                    </div>
+                    <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
+                      <p className="text-[9px] font-black text-accent uppercase tracking-widest mb-1">30D Comp. Delta</p>
+                      <h4 className="text-3xl font-black text-accent">
+                        +{recentPerformance.find(p => p.name === reportCollege)?.newComps || 0}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Overall Progress Chart */}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-4">Overall Funnel Analysis</h5>
+                      <div className="h-[250px]">
+                        <Chart 
+                          type="bar" 
+                          height="100%"
+                          series={[{
+                            name: 'Count',
+                            data: [
+                              data.filter(d => d.college === reportCollege).length,
+                              data.filter(d => d.college === reportCollege && d.completedPercent >= 100).length
+                            ]
+                          }]}
+                          options={{
+                            ...commonOptions,
+                            plotOptions: { bar: { distributed: true, borderRadius: 8, columnWidth: '50%' } },
+                            xaxis: { categories: ['Total Registered', 'Total Completed'], labels: { style: { fontWeight: 900 } } },
+                            colors: ['#FF9700', '#31B89D']
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Gender Analysis Chart */}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-orange mb-4">Gender-wise Distribution</h5>
+                      <div className="h-[250px]">
+                        {(() => {
+                          const genders = Array.from(new Set(data.filter(d => d.college === reportCollege).map(d => d.gender || 'N/A')));
+                          const regData = genders.map(g => data.filter(d => d.college === reportCollege && d.gender === g).length);
+                          const compData = genders.map(g => data.filter(d => d.college === reportCollege && d.gender === g && d.completedPercent >= 100).length);
+                          return (
+                            <Chart 
+                              type="bar" 
+                              height="100%"
+                              series={[
+                                { name: 'Registered', data: regData },
+                                { name: 'Completed', data: compData }
+                              ]}
+                              options={{
+                                ...commonOptions,
+                                plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+                                xaxis: { categories: genders, labels: { style: { fontWeight: 900 } } },
+                                colors: ['#4FD3A8', '#FF9700']
+                              }}
+                            />
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Trade Analysis Chart */}
+                    <div className="md:col-span-2 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-4">Trade-wise Registration vs Completion</h5>
+                      <div className="h-[350px]">
+                        {(() => {
+                          const trades = Array.from(new Set(data.filter(d => d.college === reportCollege).map(d => d.trade || 'N/A'))).slice(0, 10);
+                          const regData = trades.map(t => data.filter(d => d.college === reportCollege && d.trade === t).length);
+                          const compData = trades.map(t => data.filter(d => d.college === reportCollege && d.trade === t && d.completedPercent >= 100).length);
+                          return (
+                            <Chart 
+                              type="bar" 
+                              height="100%"
+                              series={[
+                                { name: 'Registered', data: regData },
+                                { name: 'Completed', data: compData }
+                              ]}
+                              options={{
+                                ...commonOptions,
+                                plotOptions: { bar: { borderRadius: 4, columnWidth: '70%' } },
+                                xaxis: { categories: trades, labels: { style: { fontSize: '9px', fontWeight: 900 } } },
+                                colors: ['#FFB900', '#31B89D']
+                              }}
+                            />
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
+                   <button 
+                     onClick={() => {
+                       onViewRegistry(reportCollege);
+                       setReportCollege(null);
+                     }}
+                     className="px-6 py-3 bg-accent text-white font-black uppercase rounded-xl tracking-widest text-[10px] shadow-lg shadow-accent/20 hover:scale-105 transition-all flex items-center gap-2"
+                   >
+                     <LucideIcon name="users" className="w-3 h-3" /> View Students
+                   </button>
+                   <button onClick={() => setReportCollege(null)} className="px-6 py-3 bg-brand text-white font-black uppercase rounded-xl tracking-widest text-[10px] shadow-lg shadow-brand/20 hover:scale-105 transition-all">Close Report View</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const downloadCSV = (data, filename) => {
+      if (data.length === 0) return;
+      const headers = ['firstName', 'lastName', 'college', 'division', 'district', 'trade', 'status', 'completedPercent', 'completedAt'];
+      const headerNames = ['firstName', 'lastName', 'college', 'division', 'district', 'trade', 'status', 'completedPercent', 'completed At'];
+      const csvRows = [];
+      csvRows.push(headerNames.join(','));
+      
+      for (const row of data) {
+        const values = headers.map(header => {
+          const val = row[header] === undefined || row[header] === null ? '' : row[header];
+          const escaped = ('' + val).replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvRows.push(values.join(','));
+      }
+      
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    };
+
+    const loadScript = (src) => {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+          if (existing.getAttribute('data-loaded') === 'true') {
+            resolve();
+            return;
+          }
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', (err) => reject(err));
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.crossOrigin = 'anonymous';
+        script.onload = () => {
+          script.setAttribute('data-loaded', 'true');
+          resolve();
+        };
+        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+        document.head.appendChild(script);
+      });
+    };
+
+    const downloadPDF = async (data, filename) => {
+      if (data.length === 0) return;
+      
+      let jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFClass) {
+        try {
+          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js");
+          jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        } catch (err) {
+          console.error("Error loading PDF libraries dynamically:", err);
+          return;
+        }
+      }
+      
+      if (!jsPDFClass) {
+        console.error("PDF class not found. Make sure the library is fully loaded.");
+        return;
+      }
+      
+      const doc = new jsPDFClass({ orientation: 'landscape', format: 'a4' });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(18, 49, 76);
+      doc.text("Medha Student Registration Registry Report", 14, 15);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${data.length}`, 14, 21);
+      
+      const headers = [['First Name', 'Last Name', 'College', 'Division', 'District', 'Trade', 'Status', 'Progress (%)', 'Completed At']];
+      const rows = data.map(item => [
+        item.firstName || '',
+        item.lastName || '',
+        item.college || '',
+        item.division || '',
+        item.district || '',
+        item.trade || '',
+        item.status || '',
+        `${item.completedPercent || 0}%`,
+        item.completedAt || 'N/A'
+      ]);
+      
+      doc.autoTable({
+        startY: 25,
+        head: headers,
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [18, 49, 76], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 15 },
+          8: { cellWidth: 25 }
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { top: 25, left: 14, right: 14, bottom: 15 },
+        didDrawPage: function(dataDraw) {
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(`Page ${dataDraw.pageNumber} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8);
+        }
+      });
+      
+      doc.save(filename);
+    };
+
+    const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeholder = "Select..." }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const [search, setSearch] = useState("");
+      const dropdownRef = useRef(null);
+
+      const safeSelected = useMemo(() => Array.isArray(selectedValues) ? selectedValues : [], [selectedValues]);
+      const safeOptions = useMemo(() => Array.isArray(options) ? options : [], [options]);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            setIsOpen(false);
+            setSearch("");
+          }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+      }, []);
+
+      // Removed raw lucide createIcons effect to prevent virtual DOM collisions
+
+      const handleToggleOption = (val) => {
+        if (safeSelected.includes(val)) {
+          onChange(safeSelected.filter(v => v !== val));
+        } else {
+          onChange([...safeSelected, val]);
+        }
+      };
+
+      const handleSelectAll = (filteredOptions) => {
+        const newSelected = Array.from(new Set([...safeSelected, ...filteredOptions]));
+        onChange(newSelected);
+      };
+
+      const handleClear = (filteredOptions) => {
+        onChange(safeSelected.filter(v => !filteredOptions.includes(v)));
+      };
+
+      const filteredOptions = useMemo(() => {
+        return safeOptions.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
+      }, [safeOptions, search]);
+
+      const displayLabel = useMemo(() => {
+        if (safeSelected.length === 0) return "All";
+        if (safeSelected.length === safeOptions.length) return "All (" + safeOptions.length + ")";
+        if (safeSelected.length === 1) return safeSelected[0];
+        return `${safeSelected.length} Selected`;
+      }, [safeSelected, safeOptions]);
+
+      return (
+        <div className="space-y-1.5 relative w-full" ref={dropdownRef}>
+          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+          <div 
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-xl px-4 py-2.5 outline-none cursor-pointer hover:border-brand-green/35 transition-all text-brand-dark flex justify-between items-center min-h-[38px] select-none"
+          >
+            <span className="truncate max-w-[150px]">{displayLabel}</span>
+            <div className="flex items-center gap-1">
+              {safeSelected.length > 0 && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange([]);
+                  }}
+                  className="text-[8px] font-extrabold text-brand-orange hover:bg-brand-orange/10 px-1.5 py-0.5 rounded uppercase leading-none"
+                >
+                  Clear
+                </button>
+              )}
+              <LucideIcon name={isOpen ? "chevron-up" : "chevron-down"} className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            </div>
+          </div>
+
+          {isOpen && (
+            <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 flex flex-col gap-2 max-h-72 min-w-[200px] animate-in fade-in duration-100">
+              {/* Action links */}
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-wider border-b border-slate-100 pb-1.5 shrink-0">
+                <button onClick={() => handleSelectAll(filteredOptions)} className="text-brand-green hover:underline">Select Visible</button>
+                <button onClick={() => handleClear(filteredOptions)} className="text-brand-orange hover:underline">Deselect Visible</button>
+              </div>
+              
+              {/* Search box if options are numerous */}
+              {safeOptions.length > 4 && (
+                <div className="relative shrink-0">
+                  <LucideIcon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    className="w-full pl-7 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold outline-none focus:bg-white focus:ring-1 focus:ring-brand-green/20 transition-all text-brand-dark"
+                  />
+                </div>
+              )}
+
+              {/* Items list */}
+              <div className="overflow-y-auto space-y-1 max-h-44 pr-1 scrollbar-thin">
+                {filteredOptions.length === 0 ? (
+                  <p className="text-[9px] font-bold text-slate-400 uppercase text-center py-2">No options found</p>
+                ) : (
+                  filteredOptions.map(opt => {
+                    const checked = safeSelected.includes(opt);
+                    return (
+                      <label 
+                        key={opt} 
+                        className="flex items-center gap-2 p-1 rounded-lg hover:bg-slate-50 cursor-pointer text-[9px] font-bold text-brand-dark uppercase truncate select-none"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={checked} 
+                          onChange={() => handleToggleOption(opt)}
+                          className="rounded border-slate-300 text-brand-green focus:ring-brand-green/35"
+                        />
+                        <span className="truncate" title={opt}>{opt}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange, monthOptions, selectedMonths, setSelectedMonths }) => {
+      const [displaySearch, setDisplaySearch] = useState(() => {
+        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
+      });
+      const [searchQuery, setSearchQuery] = useState(() => {
+        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
+      });
+
+      const [statusFilter, setStatusFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_status');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return ['Completed', 'In Progress'];
+      });
+
+      const [progressFilter, setProgressFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_progress');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        if (initialProgressFilter && initialProgressFilter !== 'All') {
+          return [initialProgressFilter];
+        }
+        return ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
+      });
+
+      const [divisionFilter, setDivisionFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_division');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
+      });
+
+      const [collegeFilter, setCollegeFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_college');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
+      });
+
+      const [selectedStudent, setSelectedStudent] = useState(null);
+
+      // Pagination States
+      const [currentPage, setCurrentPage] = useState(() => {
+        const saved = safeLocalStorage.getItem('filter_currentPage');
+        const num = saved ? Number(saved) : 1;
+        return isNaN(num) || num < 1 ? 1 : num;
+      });
+      const [pageSize, setPageSize] = useState(() => {
+        const saved = safeLocalStorage.getItem('filter_pageSize');
+        const num = saved ? Number(saved) : 15;
+        return isNaN(num) || num < 1 ? 15 : num;
+      });
+
+      // Search debounce
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          setSearchQuery(displaySearch);
+          if (onSearchChange) onSearchChange(displaySearch);
+          setCurrentPage(1);
+        }, 220);
+        return () => clearTimeout(timer);
+      }, [displaySearch]);
+
+      // Persistence Sync
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_search', searchQuery);
+      }, [searchQuery]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_status', JSON.stringify(statusFilter));
+      }, [statusFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_progress', JSON.stringify(progressFilter));
+      }, [progressFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_division', JSON.stringify(divisionFilter));
+      }, [divisionFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_college', JSON.stringify(collegeFilter));
+      }, [collegeFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_currentPage', String(currentPage));
+      }, [currentPage]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_pageSize', String(pageSize));
+      }, [pageSize]);
+
+      const safeStatusFilter = useMemo(() => Array.isArray(statusFilter) ? statusFilter : ['Completed', 'In Progress'], [statusFilter]);
+      const safeProgressFilter = useMemo(() => Array.isArray(progressFilter) ? progressFilter : ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'], [progressFilter]);
+      const safeDivisionFilter = useMemo(() => Array.isArray(divisionFilter) ? divisionFilter : [], [divisionFilter]);
+      const safeCollegeFilter = useMemo(() => Array.isArray(collegeFilter) ? collegeFilter : [], [collegeFilter]);
+
+      const divisions = useMemo(() => {
+        const unique = Array.from(new Set(data.filter(d => d.division).map(d => d.division)));
+        return unique.sort();
+      }, [data]);
+
+      const collegesForDivision = useMemo(() => {
+        let filteredVal = data;
+        if (safeDivisionFilter.length > 0) {
+          filteredVal = data.filter(d => safeDivisionFilter.includes(d.division));
+        }
+        const unique = Array.from(new Set(filteredVal.filter(d => d.college).map(d => d.college)));
+        return unique.sort();
+      }, [data, safeDivisionFilter]);
+
+      const filtered = useMemo(() => {
+        return data.filter(d => {
+          const q = searchQuery.toLowerCase();
+          // Match against original values but show masked in UI
+          const matchesSearch = 
+            String(d.firstName).toLowerCase().includes(q) || 
+            String(d.lastName).toLowerCase().includes(q) || 
+            String(d.college).toLowerCase().includes(q) ||
+            String(d.email || '').toLowerCase().includes(q) ||
+            String(d.phoneNumber || '').toLowerCase().includes(q);
+          
+          let pComp = parseFloat(d.completedPercent);
+          if (isNaN(pComp)) {
+            pComp = d.status === 'Completed' ? 100 : 0;
+          }
+
+          let matchesProgress = true;
+          if (safeProgressFilter.length > 0) {
+            matchesProgress = safeProgressFilter.some(range => {
+              if (range === '0% Completed') return pComp === 0;
+              if (range === '1%-50% Completed') return pComp > 0 && pComp <= 50;
+              if (range === '51%-70% Completed') return pComp > 50 && pComp <= 70;
+              if (range === '71%-99% Completed') return pComp > 70 && pComp < 100;
+              if (range === '100% Completed') return pComp >= 100;
+              return true;
+            });
+          }
+
+          const matchesStatus = safeStatusFilter.length === 0 || safeStatusFilter.includes(d.status);
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.includes(d.division);
+          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.includes(d.college);
+          
+          return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
+        });
+      }, [data, searchQuery, safeStatusFilter, safeProgressFilter, safeDivisionFilter, safeCollegeFilter]);
+
+      const registryStats = useMemo(() => {
+        let completed = 0;
+        let inProgress = 0;
+        filtered.forEach(student => {
+          if (student.status === 'Completed') {
+            completed++;
+          } else if (student.status === 'In Progress') {
+            inProgress++;
+          }
+        });
+        const total = filtered.length;
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return { total, completed, inProgress, completionRate };
+      }, [filtered]);
+
+      // Calculate paginated slices
+      const totalItems = filtered.length;
+      const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+      // Adjust page if it exceeds total pages after filter change
+      useEffect(() => {
+        if (currentPage > totalPages) {
+          setCurrentPage(1);
+        }
+      }, [filtered, totalPages, currentPage]);
+
+      const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+      }, [filtered, currentPage, pageSize]);
+
+      // Removed raw lucide createIcons effect to prevent virtual DOM collisions
+
+      const getVisiblePages = () => {
+        const pages = [];
+        const maxVisible = 5;
+        if (totalPages <= maxVisible) {
+          for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          let start = Math.max(2, currentPage - 1);
+          let end = Math.min(totalPages - 1, currentPage + 1);
+          
+          if (currentPage <= 3) {
+            end = 4;
+          } else if (currentPage >= totalPages - 2) {
+            start = totalPages - 3;
+          }
+          
+          if (start > 2) {
+            pages.push('...');
+          }
+          for (let i = start; i <= end; i++) {
+            pages.push(i);
+          }
+          if (end < totalPages - 1) {
+            pages.push('...');
+          }
+          pages.push(totalPages);
+        }
+        return pages;
+      };
+
+      const handleClearFilters = () => {
+        setStatusFilter(['Completed', 'In Progress']);
+        setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
+        setDivisionFilter([]);
+        setCollegeFilter([]);
+        setDisplaySearch('');
+        setSearchQuery('');
+        setCurrentPage(1);
+        if (onSearchChange) onSearchChange('');
+        if (onProgressFilterChange) onProgressFilterChange('All');
+        
+         safeLocalStorage.removeItem('registryFilter');
+        safeLocalStorage.removeItem('progressRangeFilter');
+        safeLocalStorage.removeItem('filter_search');
+        safeLocalStorage.removeItem('filter_status');
+        safeLocalStorage.removeItem('filter_progress');
+        safeLocalStorage.removeItem('filter_division');
+        safeLocalStorage.removeItem('filter_college');
+      };
+
+      return (
+        <div className="p-4 md:p-8 space-y-6">
+          {/* Enhanced Profile Modal */}
+          {selectedStudent && (
+            <div className="fixed inset-0 bg-brand-dark/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-4" onClick={() => setSelectedStudent(null)}>
+              <div className="bg-white w-full max-w-md rounded-[1.75rem] shadow-2xl flex flex-col max-h-[90vh] md:max-h-[640px] animate-in fade-in zoom-in-95 duration-200 border border-slate-100 overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* Profile Header */}
+                <div className="bg-brand-dark px-6 py-5 text-white relative overflow-hidden shrink-0">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-brand-green/20 rounded-full translate-x-16 -translate-y-16 blur-2xl"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-brand-orange/10 rounded-full -translate-x-8 translate-y-8 blur-xl"></div>
+                  
+                  <div className="relative z-10 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-md border border-white/20 shrink-0">
+                      <span className="text-xl font-black">{selectedStudent.firstName ? selectedStudent.firstName[0] : 'S'}{selectedStudent.lastName ? selectedStudent.lastName[0] : ''}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-brand-green/20 border border-brand-green/30 mb-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></div>
+                        <span className="text-[7px] font-black uppercase tracking-[0.15em] text-brand-green">Active Candidate</span>
+                      </div>
+                      <h3 className="text-lg font-black uppercase tracking-tight leading-none truncate">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
+                      <p className="text-white/50 text-[9px] font-black uppercase tracking-[0.2em] mt-1 truncate">{selectedStudent.trade}</p>
+                    </div>
+                    <button onClick={() => setSelectedStudent(null)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 hover:text-red-400 transition-all rounded-full shrink-0">
+                      <LucideIcon name="x" className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 
-                <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm">
-                    <p className="text-[10px] font-black text-gray-400 uppercase">Total Students</p>
-                    <p className="text-4xl font-black text-gray-800">{data.length}</p>
+                {/* Profile Body - Scrollable content wrapper */}
+                <div className="p-5 space-y-4 bg-slate-50/50 overflow-y-auto flex-1 scrollbar-thin">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="group bg-white p-3.5 rounded-xl border border-slate-200 transition-all hover:border-brand-green/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-green/10 transition-colors">
+                          <LucideIcon name="user" className="w-3 h-3 text-slate-400 group-hover:text-brand-green" />
+                        </div>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Demographics</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-black text-brand-dark uppercase tracking-tight">{selectedStudent.gender || 'N/A'}</p>
+                        <p className="text-[8.5px] font-bold text-slate-400 uppercase">{selectedStudent.category || 'General'} Category</p>
+                      </div>
+                    </div>
+
+                    <div className="group bg-white p-3.5 rounded-xl border border-slate-200 transition-all hover:border-brand-orange/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-orange/10 transition-colors">
+                          <LucideIcon name="book-open" className="w-3 h-3 text-slate-400 group-hover:text-brand-orange" />
+                        </div>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Academic Info</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-black text-brand-dark uppercase tracking-tight truncate">{selectedStudent.trade}</p>
+                        <p className="text-[8.5px] font-bold text-slate-400 uppercase">Skill Domain</p>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 group bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm transition-all hover:border-brand-green/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className="p-1 rounded bg-slate-100 group-hover:bg-brand-green/10 transition-colors">
+                          <LucideIcon name="map-pin" className="w-3 h-3 text-slate-400 group-hover:text-brand-green" />
+                        </div>
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">Institution</span>
+                      </div>
+                      <p className="text-xs font-black text-brand-dark uppercase tracking-tight break-words">{selectedStudent.college}</p>
+                      <p className="text-[8.5px] font-bold text-slate-400 uppercase mt-0.5">{selectedStudent.division} Division</p>
+                    </div>
                   </div>
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm">
-                    <p className="text-[10px] font-black text-gray-400 uppercase">Total Completed</p>
-                    <p className="text-4xl font-black text-[#31B89D]">{data.filter(d => d.status === 'Completed').length}</p>
+
+                  <div className={`p-4 rounded-xl border flex items-center justify-between transition-all ${selectedStudent.status === 'Completed' ? 'bg-brand-green/5 border-brand-green/20' : 'bg-brand-orange/5 border-brand-orange/20'}`}>
+                    <div>
+                      <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Current State</span>
+                      <h4 className={`text-lg font-black uppercase tracking-tighter ${selectedStudent.status === 'Completed' ? 'text-brand-green' : 'text-brand-orange'}`}>{selectedStudent.status}</h4>
+                    </div>
+                    {selectedStudent.status === 'Completed' && (
+                      <div className="text-right">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Finalized Date</span>
+                        <p className="text-xs font-black text-brand-dark uppercase tracking-tighter">{selectedStudent.completedAt ? new Date(selectedStudent.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '05 DEC 2023'}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm col-span-2">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Platform Status</p>
-                    <div className="flex items-center gap-2 text-green-500 font-bold text-sm">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      Database Synced Successfully
+
+                  <div className="bg-brand-dark p-4 rounded-xl shadow-md">
+                     <p className="text-[7.5px] font-black text-white/40 uppercase tracking-widest mb-3">Secured Contact Registry</p>
+                     <div className="grid grid-cols-1 gap-2">
+                        <div className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg border border-white/10 group cursor-help text-xs">
+                           <div className="flex items-center gap-2">
+                              <LucideIcon name="mail" className="w-3.5 h-3.5 text-brand-green shrink-0" />
+                              <span className="font-mono text-white/80 select-all">{maskSensitive(selectedStudent.email)}</span>
+                           </div>
+                           <span className="text-[6.5px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
+                        </div>
+                        {selectedStudent.phoneNumber && (
+                          <div className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg border border-white/10 group cursor-help text-xs">
+                            <div className="flex items-center gap-2">
+                              <LucideIcon name="phone" className="w-3.5 h-3.5 text-brand-orange shrink-0" />
+                              <span className="font-mono text-white/80 select-all">{maskSensitive(selectedStudent.phoneNumber)}</span>
+                            </div>
+                            <span className="text-[6.5px] font-bold text-white/20 uppercase group-hover:text-white/40 transition-colors">Encrypted</span>
+                          </div>
+                        )}
+                     </div>
+                  </div>
+                </div>
+
+                {/* Profile Footer */}
+                <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                  <button onClick={() => setSelectedStudent(null)} className="w-full py-3 bg-brand-dark text-white font-black uppercase text-xs rounded-xl tracking-[0.15em] hover:bg-black transition-all shadow-md active:scale-95">Return to Registry</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm space-y-8 transition-all hover:border-brand-green/30">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-brand-dark flex items-center gap-4">
+                <div className="w-3 h-10 bg-brand-green rounded-full shadow-[0_0_15px_rgba(49,184,157,0.4)]"></div>
+                Registration Registry
+              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <button 
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-6 py-4 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all outline-none border border-slate-200"
+                >
+                  <LucideIcon name="filter-x" className="w-4 h-4 text-brand-orange" /> <span>Clear Filters</span>
+                </button>
+                <button 
+                  onClick={() => downloadCSV(filtered, `student_report_${new Date().toISOString().slice(0,10)}.csv`)}
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
+                >
+                  <LucideIcon name="file-text" className="w-4 h-4 text-brand-green" /> <span>Export CSV</span>
+                </button>
+                <button 
+                  onClick={() => downloadPDF(filtered, `student_report_${new Date().toISOString().slice(0,10)}.pdf`)}
+                  className="flex items-center gap-2 bg-[#12314C] hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
+                >
+                  <LucideIcon name="download" className="w-4 h-4 text-amber-400" /> <span>Export PDF</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <MultiSelectDropdown 
+                label="Process State"
+                options={['Completed', 'In Progress']}
+                selectedValues={safeStatusFilter}
+                onChange={(vals) => {
+                  setStatusFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
+
+              <MultiSelectDropdown 
+                label="Progress Range"
+                options={['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']}
+                selectedValues={safeProgressFilter}
+                onChange={(vals) => {
+                  setProgressFilter(vals);
+                  if (onProgressFilterChange) {
+                    onProgressFilterChange(vals.length === 1 ? vals[0] : 'All');
+                  }
+                  setCurrentPage(1);
+                }}
+              />
+
+              <MultiSelectDropdown 
+                label="Division Area"
+                options={divisions}
+                selectedValues={safeDivisionFilter}
+                onChange={(vals) => {
+                  setDivisionFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
+
+              <MultiSelectDropdown 
+                label="Specific Institution"
+                options={collegesForDivision}
+                selectedValues={safeCollegeFilter}
+                onChange={(vals) => {
+                  setCollegeFilter(vals);
+                  setCurrentPage(1);
+                }}
+              />
+
+              <div className="space-y-1.5 font-sans">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Filter Month</label>
+                <MonthMultiSelect 
+                  options={monthOptions}
+                  selectedValues={selectedMonths}
+                  onChange={setSelectedMonths}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Search</label>
+                <div className="relative">
+                  <LucideIcon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    placeholder="Search name, contact, etc..."
+                    style={{ minHeight: "38px" }}
+                    className="w-full pl-12 pr-8 py-2.5 bg-brand-bg border border-slate-200 rounded-xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all text-brand-dark"
+                    value={displaySearch}
+                    onChange={(e) => setDisplaySearch(e.target.value)}
+                  />
+                  {displaySearch && (
+                    <button 
+                      onClick={() => setDisplaySearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-extrabold text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Cohort Summary Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Filtered Cohort */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-slate-300">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                <LucideIcon name="users" className="w-5 h-5 text-slate-500" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Filtered Cohort</span>
+                <span className="text-xl font-black text-brand-dark leading-none">{registryStats.total}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Students Selected</span>
+              </div>
+            </div>
+
+            {/* Completed */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-brand-green/30">
+              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center shrink-0">
+                <LucideIcon name="award" className="w-5 h-5 text-brand-green" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-brand-green block">Overall Completed</span>
+                <span className="text-xl font-black text-brand-green leading-none">{registryStats.completed}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Finalized Records</span>
+              </div>
+            </div>
+
+            {/* In Progress */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:border-brand-orange/30">
+              <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center shrink-0">
+                <LucideIcon name="hourglass" className="w-5 h-5 text-brand-orange" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-brand-orange block">In Progress</span>
+                <span className="text-xl font-black text-brand-orange leading-none">{registryStats.inProgress}</span>
+                <span className="text-[8px] font-bold text-slate-400 block mt-0.5 truncate">Ongoing Journeys</span>
+              </div>
+            </div>
+
+            {/* Completion Rate */}
+            <div className="bg-white p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4 col-span-2 lg:col-span-1 transition-all hover:border-brand-green/30">
+              <div className="w-10 h-10 rounded-xl bg-[#12314C]/15 flex items-center justify-center shrink-0">
+                <LucideIcon name="trending-up" className="w-5 h-5 text-[#12314C]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-wider text-[#12314C] block">Completion Ratio</span>
+                <div className="flex items-baseline gap-2 leading-none">
+                  <span className="text-xl font-black text-brand-dark">{registryStats.completionRate}%</span>
+                  <span className="text-[8px] font-extrabold text-brand-green uppercase tracking-wider">Success</span>
+                </div>
+                {/* Micro progress bar */}
+                <div className="w-full bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-orange to-brand-green h-full rounded-full transition-all duration-500" style={{ width: `${registryStats.completionRate}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop/Tablet View: Table representation */}
+          <div className="hidden md:block bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+            <table className="w-full text-left">
+              <thead className="bg-[#12314C] text-white text-[10px] font-black uppercase tracking-[0.2em] border-b border-brand-green/20">
+                <tr>
+                  <th className="px-10 py-7">Candidate Metadata</th>
+                  <th className="px-10 py-7">Academic Attribution</th>
+                  <th className="px-10 py-7 text-center">% Completed</th>
+                  <th className="px-10 py-7 text-center">Status Flag</th>
+                  <th className="px-10 py-7">Trade Designation</th>
+                </tr>
+              </thead>
+              <tbody className="text-xs text-brand-dark">
+                {paginatedData.map((s, i) => (
+                  <tr key={s.id || i} className="border-b border-slate-100 hover:bg-brand-green/[0.04] transition-all group cursor-pointer" onClick={() => setSelectedStudent(s)}>
+                    <td className="px-10 py-6">
+                      <div className="flex flex-col">
+                        <span className="font-black text-[15px] group-hover:text-brand-green transition-colors tracking-tight uppercase leading-none">{s.firstName} {s.lastName}</span>
+                        <div className="flex gap-4 mt-2">
+                          <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
+                            <LucideIcon name="mail" className="w-2.5 h-2.5 text-brand-green" />
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.email ? maskSensitive(s.email) : 'NO EMAIL'}</span>
+                          </div>
+                          {s.phoneNumber && (
+                            <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
+                              <LucideIcon name="phone" className="w-2.5 h-2.5 text-brand-orange" />
+                              <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{maskSensitive(s.phoneNumber)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6">
+                      <div className="flex flex-col">
+                        <span className="font-black text-slate-600 uppercase tracking-tighter text-xs group-hover:text-brand-dark transition-colors">{s.college}</span>
+                        <div className="flex items-center gap-1 mt-1">
+                          <LucideIcon name="map-pin" className="w-2 h-2 text-brand-green/40" />
+                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-[0.15em]">{s.division} DIVISION</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6">
+                      <div className="flex flex-col items-center justify-center">
+                        <span className="font-black text-[12px] text-brand-dark mb-1">{s.completedPercent}%</span>
+                        <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${s.completedPercent >= 100 ? 'bg-brand-green' : s.completedPercent >= 50 ? 'bg-[#FFB900]' : 'bg-brand-orange'}`}
+                            style={{ width: `${s.completedPercent}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6">
+                      <div className="flex justify-center">
+                        <span className={`px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-[0.15em] shadow-sm transition-all group-hover:scale-105 ${s.status === 'Completed' ? 'bg-brand-green text-white shadow-brand-green/20' : 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20'}`}>
+                           {s.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${s.status === 'Completed' ? 'bg-brand-green' : 'bg-brand-orange animate-pulse'}`}></div>
+                          <span className="font-black uppercase tracking-[0.15em] text-[11px] text-slate-700">{s.trade}</span>
+                        </div>
+                        <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest mt-1 ml-4">Qualified Skill Domain</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="px-10 py-20 text-center">
+                      <div className="flex flex-col items-center">
+                        <LucideIcon name="shield-alert" className="w-12 h-12 text-slate-200 mb-4" />
+                        <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">No Corresponding Records Found</h4>
+                        <p className="text-[10px] text-slate-300 mt-2 font-bold italic">Adjust filters or refine identity search terms</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View: High density list of elegant, compact student cards */}
+          <div className="block md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+            {paginatedData.map((s, i) => (
+              <div 
+                key={s.id || i} 
+                className="p-4 hover:bg-brand-green/[0.04] active:bg-brand-green/[0.08] transition-all cursor-pointer flex items-center justify-between gap-4"
+                onClick={() => setSelectedStudent(s)}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Compact initials avatar */}
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-sm text-white shrink-0 font-extrabold text-[11px]">
+                    {s.firstName ? s.firstName[0] : 'S'}{s.lastName ? s.lastName[0] : ''}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-extrabold text-[12.5px] text-brand-dark uppercase tracking-tight truncate leading-none">
+                        {s.firstName} {s.lastName}
+                      </span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate mb-1 leading-none">
+                      {s.trade} • {s.college}
+                    </p>
+                    {/* Compact structural progress bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 bg-slate-100 h-1 rounded-full overflow-hidden shrink-0">
+                        <div 
+                          className={`h-full rounded-full ${s.completedPercent >= 100 ? 'bg-brand-green' : s.completedPercent >= 50 ? 'bg-[#FFB900]' : 'bg-brand-orange'}`}
+                          style={{ width: `${s.completedPercent}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-[8px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">{s.completedPercent}%</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Right Area: Status Badge & Tap indicator */}
+                <div className="text-right shrink-0 flex flex-col items-end justify-center">
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest ${
+                    s.status === 'Completed' ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'
+                  }`}>
+                    {s.status === 'Completed' ? 'Completed' : 'Pending'}
+                  </span>
+                  <span className="text-[7px] text-slate-300 font-extrabold uppercase tracking-widest mt-1">Tap/View</span>
+                </div>
+              </div>
+            ))}
+            
+            {filtered.length === 0 && (
+              <div className="p-8 text-center">
+                <LucideIcon name="shield-alert" className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">No Corresponding Records Found</h4>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="bg-white border border-slate-200 rounded-[1.5rem] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                Showing <span className="text-brand-dark">{Math.min(totalItems, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                <span className="text-brand-dark">{Math.min(totalItems, currentPage * pageSize)}</span> of{' '}
+                <span className="text-brand-green">{totalItems}</span> entries
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2 mr-4">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Per Page</span>
+                  <select
+                    className="bg-brand-bg border border-slate-200 text-[10px] font-black uppercase rounded-lg px-2 py-1 outline-none cursor-pointer text-brand-dark"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(1)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    «
+                  </button>
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    ‹
+                  </button>
+                  
+                  {getVisiblePages().map((p, idx) => (
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="w-8 h-8 flex items-center justify-center text-[10px] font-black text-slate-300">...</span>
+                    ) : (
+                      <button
+                        key={`page-${p}`}
+                        onClick={() => setCurrentPage(p)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${currentPage === p ? 'bg-[#12314C] text-white' : 'border border-slate-200 text-slate-600 hover:border-brand-green/30 hover:bg-brand-green/[0.04]'}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  ))}
+
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => prev - 1 + 2)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    ›
+                  </button>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:border-brand-green/30 hover:bg-brand-green/[0.04] disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const App = () => {
+      const [activeTab, setActiveTab] = useState('overview');
+      const [registryFilter, setRegistryFilter] = useState(() => safeLocalStorage.getItem('registryFilter') || '');
+      const [progressRangeFilter, setProgressRangeFilter] = useState(() => safeLocalStorage.getItem('progressRangeFilter') || 'All');
+      const [selectedMonths, setSelectedMonths] = useState(() => {
+        try {
+          const val = safeLocalStorage.getItem('selectedMonths');
+          if (val) {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
+      });
+
+      useEffect(() => {
+        safeLocalStorage.setItem('registryFilter', registryFilter || '');
+      }, [registryFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
+      }, [progressRangeFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('selectedMonths', JSON.stringify(selectedMonths || []));
+      }, [selectedMonths]);
+
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [lastSync, setLastSync] = useState(null);
+      const [isLive, setIsLive] = useState(false);
+      const safeData = useMemo(() => Array.isArray(data) ? data : [], [data]);
+
+      const parseMonthYear = (dateStr) => {
+        if (!dateStr) return null;
+        
+        let str = String(dateStr).trim().replace(/\s+/g, ' ');
+        if (!str || str.toLowerCase() === 'not specified' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') {
+          return null;
+        }
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const fullMonthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+        // Try to match wordy months first
+        // Example: "27-Nov-23" or "27-Nov-2023" or "27 Nov 2023" or "27-November-2023"
+        let normalizedStr = str.replace(/[-/]/g, ' ').toLowerCase();
+        let words = normalizedStr.split(' ');
+        
+        let foundMonthIndex = -1;
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          const idxFull = fullMonthNames.indexOf(w);
+          if (idxFull !== -1) {
+            foundMonthIndex = idxFull;
+            break;
+          }
+          const idxShort = monthNames.map(m => m.toLowerCase()).indexOf(w.substring(0, 3));
+          if (idxShort !== -1 && w.length >= 3) {
+            foundMonthIndex = idxShort;
+            break;
+          }
+        }
+
+        if (foundMonthIndex !== -1) {
+          let year = null;
+          for (const w of words) {
+            if (/^\d{4}$/.test(w)) {
+              year = parseInt(w);
+              break;
+            }
+          }
+          if (year === null) {
+            for (const w of words) {
+              if (/^\d{2}$/.test(w) && !/^\d{4}$/.test(w)) {
+                const val = parseInt(w);
+                year = 2000 + val;
+                break;
+              }
+            }
+          }
+          if (year !== null) {
+            return {
+              label: `${monthNames[foundMonthIndex]}-${String(year).slice(-2)}`,
+              raw: `${year}-${String(foundMonthIndex + 1).padStart(2, '0')}`
+            };
+          }
+        }
+
+        // Match YYYY-MM-DD or YYYY/MM/DD
+        let matchISO = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (matchISO) {
+          const year = parseInt(matchISO[1]);
+          const month = parseInt(matchISO[2]) - 1;
+          if (month >= 0 && month < 12) {
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+
+        // Match numeric digits: DD/MM/YYYY, DD-MM-YYYY, MM/DD/YYYY, MM-DD-YYYY
+        let matchNumeric = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+        if (matchNumeric) {
+          const num1 = parseInt(matchNumeric[1]);
+          const num2 = parseInt(matchNumeric[2]);
+          let year = parseInt(matchNumeric[3]);
+          if (year < 100) year += 2000;
+
+          if (num1 > 12 && num2 <= 12) {
+            const month = num2 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          } else if (num2 > 12 && num1 <= 12) {
+            const month = num1 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          } else if (num1 <= 12 && num2 <= 12) {
+            const month = num2 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+
+        // Native Date parser fallback
+        const date = new Date(str);
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = date.getMonth();
+          return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+        }
+        
+        return null;
+      };
+
+      const monthOptions = useMemo(() => {
+        const monthsMap = {};
+        safeData.forEach(student => {
+          const parsed = parseMonthYear(student.startedAt);
+          if (parsed) {
+            monthsMap[parsed.raw] = parsed.label;
+          }
+        });
+        
+        const sortedKeys = Object.keys(monthsMap).sort((a, b) => a.localeCompare(b));
+        return sortedKeys.map(key => ({ value: key, label: monthsMap[key] }));
+      }, [safeData]);
+
+      const filteredData = useMemo(() => {
+        if (selectedMonths.length === 0) return safeData;
+        return safeData.filter(student => {
+          const parsed = parseMonthYear(student.startedAt);
+          return parsed && selectedMonths.includes(parsed.raw);
+        });
+      }, [safeData, selectedMonths]);
+
+      const mockData = useMemo(() => [
+        { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
+        { firstName: "Anjali", lastName: "Kumari", college: "ITI Jhanjharpur", status: "In Progress", division: "Patna", gender: "Female", incomeLevel: "Medium", trade: "Fitter", category: "OBC", completedPercent: 45, startedAt: "2023-11-15", phoneNumber: "9876543211", email: "anjali.k@example.com" },
+        { firstName: "Suresh", lastName: "Prasad", college: "ITI Sitamarhi", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Welder", category: "SC", completedPercent: 100, startedAt: "2023-11-10", completedAt: "2023-12-10", phoneNumber: "9876543212", email: "suresh.p@example.com" },
+        { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: "2023-11-05", completedAt: "2023-12-15", phoneNumber: "9876543213", email: "p.devi@example.com" },
+      ], []);
+
+      const fetchData = async () => {
+        const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+
+        // 1. Try Google Apps Script Native Sync (if deployed as Web App)
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+           console.log("Sync Action: Initializing via GAS native...");
+           google.script.run
+            .withSuccessHandler((result) => {
+              setData(result && result.length > 0 ? result : mockData);
+              setLoading(false);
+              setLastSync(new Date());
+              setIsLive(true);
+            })
+            .withFailureHandler((err) => {
+              console.error("Sync Failure (GAS):", err);
+              // Failover to CSV or Mock
+              if (!GOOGLE_SHEET_CSV_URL) {
+                setData(mockData);
+                setLoading(false);
+              }
+            })
+            .getSpreadsheetData();
+          
+          if (!GOOGLE_SHEET_CSV_URL) return; // Only stop if no CSV fallback
+        }
+
+        // 2. Try External CSV (GitHub/Public Link) with Cache-Busting
+        if (GOOGLE_SHEET_CSV_URL) {
+        console.log("Sync Action: Initializing via CSV Download...");
+        
+        // Add cache-buster to URL to ensure fresh data from GitHub/Servers
+        const cacheBuster = `&cb=${Date.now()}`;
+        const cleanUrl = GOOGLE_SHEET_CSV_URL.trim() + cacheBuster;
+        
+        Papa.parse(cleanUrl, {
+          download: true,
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.data && results.data.length > 0) {
+                const processed = results.data.map((row, index) => {
+                  let obj = {};
+                  Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
+
+                  // Map Logic
+                  const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
+                  const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
+                  const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+
+                  let completedValue = 0;
+                  const compKey = Object.keys(obj).find(k => 
+                    (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
+                  );
+                  if (compKey) {
+                    let rawVal = obj[compKey];
+                    if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
+                    completedValue = parseFloat(rawVal) || 0;
+                  }
+
+                  const statusStr = String(obj.status || '').toLowerCase();
+                  const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
+
+                  return {
+                    id: index + 1,
+                    firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
+                    lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
+                    email: obj.email || obj.emailid || '',
+                    phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
+                    college: collegeName || 'Unknown ITI',
+                    division: divisionName,
+                    district: obj.district || obj.homedistrict || '',
+                    trade: obj.trade || obj.tradename || obj.subject || '',
+                    status: finalized ? 'Completed' : 'In Progress',
+                    gender: obj.gender || obj.sex || 'Not Specified',
+                    category: obj.category || obj.socialcategory || 'General',
+                    incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
+                    startedAt: (() => {
+                      const dateKeys = ['startedat', 'registrationdate', 'timestamp', 'createdat', 'submissiondate', 'date', 'datetime', 'enrolledat', 'enrollmentdate', 'joiningdate', 'startingdate'];
+                      for (const dk of dateKeys) {
+                        if (obj[dk]) return obj[dk];
+                      }
+                      const fallbackKey = Object.keys(obj).find(k => 
+                        (k.includes('date') || k.includes('time') || k.endsWith('at') || k.startsWith('start')) && 
+                        !k.includes('completed')
+                      );
+                      return fallbackKey ? obj[fallbackKey] : '';
+                    })(),
+                    completedAt: (() => {
+                      const compDateKeys = ['completedat', 'completiondate', 'completed_at', 'finishdate', 'finishedat', 'completed'];
+                      for (const cdk of compDateKeys) {
+                        if (obj[cdk]) return obj[cdk];
+                      }
+                      const fallbackKey = Object.keys(obj).find(k => 
+                        (k.includes('date') || k.includes('time') || k.endsWith('at')) && 
+                        k.includes('completed')
+                      );
+                      return fallbackKey ? obj[fallbackKey] : '';
+                    })(),
+                    completedPercent: finalized ? 100 : completedValue
+                  };
+                });
+                setData(processed);
+                setLastSync(new Date());
+                setIsLive(true);
+              } else {
+                console.warn("Sync Notice: No records found in CSV, using demo data.");
+                setData(mockData);
+                setIsLive(false);
+              }
+              setLoading(false);
+            },
+            error: (err) => {
+              console.error("Sync Failure (Download/Parse):", err);
+              setData(mockData);
+              setLoading(false);
+              setIsLive(false);
+            }
+          });
+          return;
+        }
+
+        // 3. Absolute Fallback
+        setTimeout(() => {
+          setData(mockData);
+          setLoading(false);
+          setLastSync(new Date());
+          setIsLive(false);
+        }, 1000);
+      };
+
+      useEffect(() => {
+        fetchData();
+        
+        // Automatic update every 60 seconds
+        const pollInterval = setInterval(fetchData, 60000);
+        return () => clearInterval(pollInterval);
+      }, []);
+
+      // Removed raw createIcons hook in main app to rely entirely on React-safe LucideIcon renderer
+
+      if (loading) return (
+        <div className="flex items-center justify-center h-screen bg-brand-bg text-brand-dark">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="font-black uppercase tracking-widest text-[10px] text-brand-green">Synchronizing Platform...</p>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          <header className="bg-white text-brand-dark py-12 lg:py-20 px-6 lg:px-8 text-center border-b-[8px] border-brand-green relative flex flex-col items-center justify-center overflow-hidden shadow-sm">
+            {/* Background Decorative Elements */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-brand-green/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[100px] pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-80 h-80 bg-brand-orange/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-[100px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 w-[120%] h-40 bg-brand-green-pale/10 -translate-x-1/2 -translate-y-1/2 -rotate-12 blur-[80px] pointer-events-none"></div>
+
+            {/* ITI Logo - Top Left */}
+            <div className="absolute left-4 top-4 lg:left-12 lg:top-12 bg-white/50 p-2 rounded-2xl backdrop-blur-md shadow-sm border border-brand-green/10 transition-transform hover:scale-105 z-20">
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Directorate_General_of_Employment_and_Training_%28DGET%29_India.png/240px-Directorate_General_of_Employment_and_Training_%28DGET%29_India.png" 
+                alt="ITI Logo" 
+                className="h-10 lg:h-20 w-auto object-contain"
+                referrerPolicy="no-referrer"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+            
+            {/* Medha Logo - Top Right */}
+            <div className="absolute right-4 top-4 lg:right-12 lg:top-12 bg-white/50 p-2 rounded-2xl backdrop-blur-md shadow-sm border border-brand-orange/10 transition-transform hover:scale-105 z-20">
+              <img 
+                src="https://www.medha.org.in/wp-content/uploads/2021/04/Medha-Logo-01.png" 
+                alt="Medha Logo" 
+                className="h-10 lg:h-20 w-auto object-contain"
+                referrerPolicy="no-referrer"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+            
+            <div className="max-w-4xl mx-auto relative z-10 flex flex-col items-center">
+              <div className="inline-flex items-center gap-2 bg-brand-green/10 border border-brand-green/20 px-4 py-1.5 rounded-full mb-6">
+                <span className="w-2 h-2 bg-brand-green rounded-full animate-pulse shadow-[0_0_8px_#31B89D]"></span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-green">Real-time Platform</span>
+              </div>
+              <h1 className="text-5xl lg:text-8xl font-black tracking-tighter uppercase mb-6 leading-none text-brand-dark">
+                AI Progress <span className="text-brand-orange relative">Dashboard
+                  <span className="absolute -bottom-2 left-0 w-full h-3 bg-brand-orange-pale -rotate-1 -z-10 rounded"></span>
+                </span>
+              </h1>
+              <div className="h-1.5 w-32 bg-brand-green rounded-full mb-6 shadow-sm"></div>
+              <p className="text-xs lg:text-xl font-bold tracking-[0.4em] text-slate-500 uppercase">Skill Tracking & Performance Blueprint</p>
+            </div>
+          </header>
+
+          <div className="lg:hidden flex flex-col bg-white border-b border-slate-200">
+            <div className="flex border-b border-slate-100">
+              <button onClick={() => setActiveTab('overview')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'overview' ? 'text-brand border-b-2 border-brand font-black' : 'text-slate-400'}`}>
+                <LucideIcon name="layout-dashboard" className="w-3 h-3" /> Overview
+              </button>
+              <button onClick={() => setActiveTab('students')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'students' ? 'text-brand border-b-2 border-brand font-black' : 'text-slate-400'}`}>
+                <LucideIcon name="users" className="w-3 h-3" /> Registry
+              </button>
+            </div>
+
+            <div className="flex overflow-x-auto no-scrollbar bg-slate-50 p-2 gap-2">
+              <a href="https://pehel.medha.org.in/systemAdoption" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <LucideIcon name="user-plus" className="w-3 h-3" /> Register
+              </a>
+              <a href="https://learn.medha.org.in/users/sign_in" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <LucideIcon name="log-in" className="w-3 h-3" /> Login
+              </a>
+              <a href="https://learn.medha.org.in/users/password/new" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <LucideIcon name="key" className="w-3 h-3" /> Reset
+              </a>
+              <a href="https://youtube.com/@prakhardwivedi-e7y?si=bnYGchmYq4rMEx-a" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
+                <LucideIcon name="play-circle" className="w-3 h-3" /> Tutorials
+              </a>
+            </div>
+          </div>
+
+          <div className="flex flex-1 overflow-hidden">
+            <aside className="w-64 border-r border-slate-200 bg-white hidden lg:flex flex-col p-6 space-y-6 overflow-y-auto no-scrollbar">
+              <div className="space-y-6">
+                <nav className="space-y-2">
+                  <button 
+                    onClick={() => setActiveTab('overview')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'overview' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <LucideIcon name="layout-dashboard" className="w-4 h-4" /> Overview
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('students')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-black uppercase tracking-widest ${activeTab === 'students' ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <LucideIcon name="users" className="w-4 h-4" /> Registry
+                  </button>
+                </nav>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Course Hub</p>
+                      <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
+                    </div>
+                    <div className="space-y-1">
+                      <a 
+                        href="https://pehel.medha.org.in/systemAdoption" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <LucideIcon name="user-plus" className="w-4 h-4 text-slate-400 group-hover:text-brand" />
+                        </div>
+                        Registration
+                      </a>
+                      <a 
+                        href="https://learn.medha.org.in/users/sign_in" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <LucideIcon name="log-in" className="w-4 h-4 text-slate-400 group-hover:text-brand" />
+                        </div>
+                        Sign In
+                      </a>
+                      <a 
+                        href="https://learn.medha.org.in/users/password/new" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <LucideIcon name="key" className="w-4 h-4 text-slate-400 group-hover:text-brand" />
+                        </div>
+                        Reset
+                      </a>
+                      <a 
+                        href="https://youtube.com/@prakhardwivedi-e7y?si=bnYGchmYq4rMEx-a" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:text-brand hover:shadow-sm border border-transparent hover:border-slate-100 group transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-100 group-hover:bg-brand/5 group-hover:border-brand/20 transition-colors">
+                          <LucideIcon name="play-circle" className="w-4 h-4 text-slate-400 group-hover:text-brand" />
+                        </div>
+                        Tutorials
+                      </a>
                     </div>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-2xl border overflow-hidden shadow-sm">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-50 border-b text-[10px] font-black uppercase text-gray-400">
-                    <tr>
-                      <th className="px-6 py-4">Name</th>
-                      <th className="px-6 py-4">College</th>
-                      <th className="px-6 py-4">Trade</th>
-                      <th className="px-6 py-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y text-sm">
-                    {data.map((item, i) => (
-                      <tr key={i} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-700">{item.firstName} {item.lastName}</td>
-                        <td className="px-6 py-4 text-gray-500">{item.college}</td>
-                        <td className="px-6 py-4 text-gray-500">{item.trade}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${item.status === 'Completed' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                            {item.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </main>
+            </aside>
 
-          <footer className="p-6 text-center text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">
-            Data Source: Google Sheets | Bihar DSDA &copy; 2024
+            <main className="flex-1 p-4 lg:p-8 bg-[#F2F2F2]">
+              {activeTab === 'overview' ? (
+                <Dashboard 
+                  data={filteredData} 
+                  lastSync={lastSync}
+                  isLive={isLive}
+                  monthOptions={monthOptions}
+                  selectedMonths={selectedMonths}
+                  setSelectedMonths={setSelectedMonths}
+                  onViewRegistry={(college) => {
+                    safeLocalStorage.setItem('filter_search', college);
+                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    safeLocalStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
+                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_currentPage', '1');
+                    setRegistryFilter(college);
+                    setProgressRangeFilter('All');
+                    setActiveTab('students');
+                  }}
+                  onViewProgressRegistry={(range) => {
+                    safeLocalStorage.setItem('filter_search', '');
+                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    safeLocalStorage.setItem('filter_progress', JSON.stringify([range]));
+                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_currentPage', '1');
+                    setRegistryFilter('');
+                    setProgressRangeFilter(range);
+                    setActiveTab('students');
+                  }}
+                />
+              ) : (
+                <StudentTable 
+                  data={filteredData} 
+                  initialSearch={registryFilter}
+                  onSearchChange={setRegistryFilter}
+                  initialProgressFilter={progressRangeFilter}
+                  onProgressFilterChange={setProgressRangeFilter}
+                  monthOptions={monthOptions}
+                  selectedMonths={selectedMonths}
+                  setSelectedMonths={setSelectedMonths}
+                />
+              )}
+            </main>
+          </div>
+
+          <footer className="bg-brand-green text-white px-4 lg:px-8 py-4 flex flex-col lg:flex-row justify-between items-center text-[8px] lg:text-[9px] font-black tracking-[0.1em] lg:tracking-[0.25em] uppercase gap-2 lg:gap-0">
+            <div className="flex flex-col lg:flex-row items-center gap-2 lg:gap-8 text-center lg:text-left">
+              <span className="flex items-center gap-2 italic">
+                <LucideIcon name="database" className="w-3 h-3 text-white" />
+                DATA SOURCE: GOOGLE SHEETS
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span>© BIHAR GOVERNMENT / DSDA</span>
+            </div>
           </footer>
         </div>
       );
