@@ -1,5 +1,6 @@
 /**
  * Google Apps Script - Student Dashboard Backend
+ * Optimized for performance and large datasets.
  */
 
 function doGet(e) {
@@ -10,6 +11,7 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  // Ensure 'index' matches your HTML file name
   return HtmlService.createTemplateFromFile('index')
       .evaluate()
       .setTitle('Student Dashboard')
@@ -18,118 +20,127 @@ function doGet(e) {
 }
 
 /**
- * Fetches and processes data from the spreadsheet with level-1 caching.
+ * Fetches and processes data from the spreadsheet.
  */
 function getSpreadsheetData() {
   const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("spreadsheet_data");
+  const CACHE_KEY = "spreadsheet_data_v2";
   
+  const cachedData = cache.get(CACHE_KEY);
   if (cachedData) {
     try {
       return JSON.parse(cachedData);
     } catch (e) {
-      console.error("Cache parse error", e);
+      console.warn("Cache parse failed, fetching fresh data...");
     }
   }
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Try 'dataset' sheet first, fallback to first sheet
     const sheet = ss.getSheetByName('dataset') || ss.getSheets()[0];
-    const range = sheet.getDataRange();
-    const data = range.getValues();
+    const data = sheet.getDataRange().getValues();
     
     if (data.length < 2) return [];
     
-    const headers = data[0].map(h => String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
-    const rows = data.slice(1);
+    // 1. Pre-process headers once
+    const rawHeaders = data[0];
+    const headers = rawHeaders.map(h => 
+      String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+    );
     
+    const rows = data.slice(1);
+    const timeZone = Session.getScriptTimeZone();
+    
+    // 2. Identify important column indices once (Performance Optimization)
+    const colIdx = {
+      status: headers.indexOf('status'),
+      percent: headers.find(h => h.includes('percent') || h === 'progress'),
+      studentName: headers.find(h => h.includes('studentname') || h.includes('fullname'))
+    };
+
     const processedData = rows.map((row, index) => {
       let obj = {};
       headers.forEach((key, i) => {
         let value = row[i];
-        if (value instanceof Date) {
-          value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+        // Safe Date Formatting
+        if (value instanceof Date && !isNaN(value.getTime())) {
+          value = Utilities.formatDate(value, timeZone, "yyyy-MM-dd HH:mm:ss");
+        } else if (value === null || value === undefined) {
+          value = '';
         }
         obj[key] = value;
       });
       
       // Intelligent Mapping
       const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
-      const collegeName = rawCollege.replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
-      
+      const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
       const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
       
-      // Completion Logic
+      // Progress/Completion Logic
       let completedValue = 0;
-      const compKey = Object.keys(obj).find(k => (k.includes('percent') || k === 'completed' || k === 'completion') && !k.includes('at'));
+      const compKey = headers.find(h => (h.includes('percent') || h === 'completed' || h === 'completion') && !h.includes('at'));
       if (compKey) {
         completedValue = parseFloat(obj[compKey]) || 0;
       }
 
-      // Status Override
       const statusStr = String(obj.status || '').toLowerCase();
-      if (statusStr === 'completed' || statusStr === 'complete' || completedValue >= 100) {
-        completedValue = 100;
-      }
+      const isFinished = (statusStr.includes('complete') || completedValue >= 100);
+      if (isFinished) completedValue = 100;
+
+      // Safe Name Extraction (No optional chaining crash)
+      const sName = String(obj.studentname || obj.fullname || '');
+      const nameParts = sName.split(' ');
 
       return {
         id: index + 1,
-        firstName: obj.firstname || obj.studentname?.split(' ')[0] || String(row[0] || ''),
-        lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || String(row[1] || ''),
+        firstName: obj.firstname || nameParts[0] || '',
+        lastName: obj.lastname || nameParts.slice(1).join(' ') || '',
         email: obj.email || obj.emailid || '',
         phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
         college: collegeName || 'Unknown ITI',
         division: divisionName,
         district: obj.district || obj.homedistrict || '',
         trade: obj.trade || obj.tradename || '',
-        status: completedValue >= 100 ? 'Completed' : 'In Progress',
+        status: isFinished ? 'Completed' : 'In Progress',
         gender: obj.gender || obj.sex || 'Not Specified',
         category: obj.category || obj.socialcategory || 'General',
         incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-        startedAt: (() => {
-          const dateKeys = ['startedat', 'registrationdate', 'timestamp', 'createdat', 'submissiondate', 'date', 'datetime', 'enrolledat', 'enrollmentdate', 'joiningdate', 'startingdate'];
-          for (let i = 0; i < dateKeys.length; i++) {
-            if (obj[dateKeys[i]]) return obj[dateKeys[i]];
-          }
-          const keys = Object.keys(obj);
-          for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            if ((k.indexOf('date') !== -1 || k.indexOf('time') !== -1 || k.substring(Math.max(0, k.length - 2)) === 'at' || k.indexOf('start') !== -1) && k.indexOf('completed') === -1) {
-              return obj[k];
-            }
-          }
-          return '';
-        })(),
-        completedAt: (() => {
-          const compDateKeys = ['completedat', 'completiondate', 'completed_at', 'finishdate', 'finishedat', 'completed'];
-          for (let i = 0; i < compDateKeys.length; i++) {
-            if (obj[compDateKeys[i]]) return obj[compDateKeys[i]];
-          }
-          const keys = Object.keys(obj);
-          for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            if ((k.indexOf('date') !== -1 || k.indexOf('time') !== -1 || k.substring(Math.max(0, k.length - 2)) === 'at') && k.indexOf('completed') !== -1) {
-              return obj[k];
-            }
-          }
-          return '';
-        })(),
+        startedAt: extractDate(obj, ['startedat', 'registrationdate', 'timestamp', 'createdat'], 'start'),
+        completedAt: extractDate(obj, ['completedat', 'completiondate', 'finishdate'], 'completed'),
         completedPercent: completedValue
       };
     });
 
-    // Cache the processed data for 10 minutes
+    // 3. Smart Caching (Handle 100KB limit)
     try {
-      cache.put("spreadsheet_data", JSON.stringify(processedData), 600);
+      const stringified = JSON.stringify(processedData);
+      if (stringified.length < 100000) { // Only cache if under ~100KB
+        cache.put(CACHE_KEY, stringified, 600);
+      }
     } catch (e) {
-      // If data is too large for cache (100KB limit), just skip caching
+      console.warn("Data too large to cache");
     }
 
     return processedData;
   } catch (error) {
-    console.error('Data Fetching Critical Error:', error);
+    console.error('Critical Backend Error:', error.toString());
     return [];
   }
+}
+
+/**
+ * Helper to find date fields in the object
+ */
+function extractDate(obj, preferredKeys, keyword) {
+  // Check preferred keys first
+  for (let key of preferredKeys) {
+    if (obj[key]) return obj[key];
+  }
+  // Fallback to searching all keys for the keyword
+  const keys = Object.keys(obj);
+  const found = keys.find(k => k.includes(keyword) && k.includes('date'));
+  return found ? obj[found] : '';
 }
 
 function include(filename) {
