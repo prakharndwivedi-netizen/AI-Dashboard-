@@ -7,25 +7,30 @@
   <title>Student Dashboard</title>
   
   <!-- CDNs -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/regenerator-runtime@0.13.11/runtime.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js" crossorigin></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.0/dist/react-apexcharts.iife.min.js" crossorigin></script>
-  <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js" crossorigin></script>
+  <script src="https://unpkg.com/apexcharts@3.35.3/dist/apexcharts.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
   
   <script>
     window.onerror = function(msg, url, lineNo, columnNo, error) {
-      console.log('Global Error caught: ' + msg + ' at ' + lineNo + ':' + columnNo);
+      console.warn('Global Error caught:', msg, 'at', url, 'line:', lineNo, 'col:', columnNo);
+      // Suppress cross-origin CORS mask "Script error." and websocket HMR notifications which are benign
+      if (typeof msg === 'string' && (msg.toLowerCase().includes('script error') || msg.toLowerCase().includes('websocket'))) {
+        return true; 
+      }
       return false;
     };
   </script>
   
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/index.css">
   
   <style>
     body { 
@@ -99,6 +104,31 @@
   <script type="text/babel" data-presets="custom-babel-preset">
     const { useState, useMemo, useEffect, useRef } = React;
 
+    const safeLocalStorage = {
+      getItem(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          console.warn("Storage warning: Reading localStorage is blocked or unavailable.", e);
+          return null;
+        }
+      },
+      setItem(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          console.warn("Storage warning: Writing to localStorage is blocked or unavailable.", e);
+        }
+      },
+      removeItem(key) {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.warn("Storage warning: Removing from localStorage is blocked or unavailable.", e);
+        }
+      }
+    };
+
     const getIconSvg = (name, className = "w-4 h-4") => {
       try {
         if (!name || typeof name !== 'string') return '';
@@ -171,7 +201,7 @@
      * 2. Select 'Entire Document' and 'Comma-separated values (.csv)'.
      * 3. Copy the link and paste it below in GOOGLE_SHEET_CSV_URL.
      */
-    const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9DApK8KKyzzUcIJK_EbtPCyAYVOqYLndR5O9obqyZoVBJzt5Yr10LYhEkrUEIkUzucVNhBkF2srgh/pub?gid=493239070&single=true&output=csv"; 
+    const GOOGLE_SHEET_CSV_URL = "/api/data"; 
 
     // --- MANUAL APEX CHARTS BRIDGE ---
     const Chart = (props) => {
@@ -191,42 +221,61 @@
         }
       }, [libFound]);
 
+      // Seamless update of options and series without recreating the DOM element, preventing flicker
       useEffect(() => {
         if (!libFound || !chartRef.current) return;
 
-        // Small delay to ensure container is fully sized
-        const timeout = setTimeout(() => {
-          if (!chartRef.current) return; // Guard against unmounting
-          
-          if (chartInstance.current) {
-            try {
-              chartInstance.current.destroy();
-            } catch (e) {
-              console.warn("ApexCharts destroy failed", e);
-            }
-          }
+        let active = true;
+
+        const initOrUpdateChart = () => {
+          if (!chartRef.current || !active) return;
 
           const config = {
-            ...props.options,
+            ...(props.options || {}),
             series: props.series,
             chart: {
-              ...props.options.chart,
+              ...(props.options?.chart || {}),
               type: props.type || 'line',
               height: props.height || 'auto',
               animations: { enabled: true }
             }
           };
 
-          try {
-            chartInstance.current = new window.ApexCharts(chartRef.current, config);
-            chartInstance.current.render();
-          } catch (e) {
-            console.error("ApexCharts render failed", e);
+          if (chartInstance.current) {
+            try {
+              chartInstance.current.updateOptions(config, false, true);
+            } catch (e) {
+              console.warn("ApexCharts updateOptions failed, recreating...", e);
+              try {
+                chartInstance.current.destroy();
+              } catch (destErr) {}
+              try {
+                chartInstance.current = new window.ApexCharts(chartRef.current, config);
+                chartInstance.current.render();
+              } catch (createErr) {
+                console.error("ApexCharts recreate failed", createErr);
+              }
+            }
+          } else {
+            try {
+              chartInstance.current = new window.ApexCharts(chartRef.current, config);
+              chartInstance.current.render();
+            } catch (e) {
+              console.error("ApexCharts render failed", e);
+            }
           }
-        }, 100);
+        };
+
+        const timeout = setTimeout(initOrUpdateChart, 50);
 
         return () => {
+          active = false;
           clearTimeout(timeout);
+        };
+      }, [libFound, props.options, props.series, props.type, props.height]);
+
+      useEffect(() => {
+        return () => {
           if (chartInstance.current) {
             try {
               chartInstance.current.destroy();
@@ -236,7 +285,7 @@
             chartInstance.current = null;
           }
         };
-      }, [libFound, props.options, props.series, props.type, props.height]);
+      }, []);
 
       if (!libFound) {
         return (
@@ -498,7 +547,7 @@
           <div className="flex justify-between items-start">
             <h1 className={`text-[10px] font-black uppercase tracking-[0.15em] ${variant === 'green' ? 'text-brand-green' : 'text-brand-orange'}`}>{title}</h1>
             <div className={`p-2 rounded-xl ${variant === 'green' ? 'bg-brand-green/10' : 'bg-brand-orange/10'}`}>
-              <i data-lucide={icon} className={`w-4 h-4 ${variant === 'green' ? 'text-brand-green' : 'text-brand-orange'}`}></i>
+              <LucideIcon name={icon} className={`w-4 h-4 ${variant === 'green' ? 'text-brand-green' : 'text-brand-orange'}`} />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
@@ -507,6 +556,8 @@
         </div>
       </div>
     );
+
+
 
     const Dashboard = ({ data, onViewRegistry, onViewProgressRegistry, lastSync, isLive }) => {
       const [selectedDivision, setSelectedDivision] = useState('All');
@@ -706,7 +757,7 @@
       const commonOptions = {
         chart: { toolbar: { show: false }, zoom: { enabled: false } },
         colors: CHART_COLORS,
-        legend: { position: 'bottom', fontSize: '10px', labels: { colors: '#31B89D' } },
+        legend: { position: 'bottom', fontSize: '10px', labels: { colors: '#334155' } },
         dataLabels: { enabled: false },
         tooltip: {
           theme: 'light',
@@ -718,8 +769,8 @@
         ...commonOptions,
         stroke: { curve: 'smooth', width: 3 },
         fill: { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.05 } },
-        xaxis: { labels: { style: { colors: '#31B89D', fontSize: '9px', fontWeight: 700 } } },
-        yaxis: { labels: { style: { colors: '#FF9700', fontWeight: 700 } } },
+        xaxis: { labels: { style: { colors: '#64748b', fontSize: '9px', fontWeight: 700 } } },
+        yaxis: { labels: { style: { colors: '#64748b', fontWeight: 700 } } },
         markers: { size: 5, strokeWidth: 3, hover: { size: 7 } }
       };
 
@@ -1199,6 +1250,107 @@
       }
     };
 
+    const loadScript = (src) => {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+          if (existing.getAttribute('data-loaded') === 'true') {
+            resolve();
+            return;
+          }
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', (err) => reject(err));
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.crossOrigin = 'anonymous';
+        script.onload = () => {
+          script.setAttribute('data-loaded', 'true');
+          resolve();
+        };
+        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+        document.head.appendChild(script);
+      });
+    };
+
+    const downloadPDF = async (data, filename) => {
+      if (data.length === 0) return;
+      
+      let jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFClass) {
+        try {
+          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js");
+          jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        } catch (err) {
+          console.error("Error loading PDF libraries dynamically:", err);
+          return;
+        }
+      }
+      
+      if (!jsPDFClass) {
+        console.error("PDF class not found. Make sure the library is fully loaded.");
+        return;
+      }
+      
+      const doc = new jsPDFClass({ orientation: 'landscape', format: 'a4' });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(18, 49, 76);
+      doc.text("Medha Student Registration Registry Report", 14, 15);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${data.length}`, 14, 21);
+      
+      const headers = [['First Name', 'Last Name', 'College', 'Division', 'District', 'Trade', 'Status', 'Progress (%)', 'Completed At']];
+      const rows = data.map(item => [
+        item.firstName || '',
+        item.lastName || '',
+        item.college || '',
+        item.division || '',
+        item.district || '',
+        item.trade || '',
+        item.status || '',
+        `${item.completedPercent || 0}%`,
+        item.completedAt || 'N/A'
+      ]);
+      
+      doc.autoTable({
+        startY: 25,
+        head: headers,
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [18, 49, 76], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 15 },
+          8: { cellWidth: 25 }
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { top: 25, left: 14, right: 14, bottom: 15 },
+        didDrawPage: function(dataDraw) {
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(`Page ${dataDraw.pageNumber} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8);
+        }
+      });
+      
+      doc.save(filename);
+    };
+
     const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeholder = "Select..." }) => {
       const [isOpen, setIsOpen] = useState(false);
       const [search, setSearch] = useState("");
@@ -1328,15 +1480,15 @@
 
     const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange }) => {
       const [displaySearch, setDisplaySearch] = useState(() => {
-        return localStorage.getItem('filter_search') || initialSearch || '';
+        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
       });
       const [searchQuery, setSearchQuery] = useState(() => {
-        return localStorage.getItem('filter_search') || initialSearch || '';
+        return safeLocalStorage.getItem('filter_search') || initialSearch || '';
       });
 
       const [statusFilter, setStatusFilter] = useState(() => {
         try {
-          const saved = localStorage.getItem('filter_status');
+          const saved = safeLocalStorage.getItem('filter_status');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1347,7 +1499,7 @@
 
       const [progressFilter, setProgressFilter] = useState(() => {
         try {
-          const saved = localStorage.getItem('filter_progress');
+          const saved = safeLocalStorage.getItem('filter_progress');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1361,7 +1513,7 @@
 
       const [divisionFilter, setDivisionFilter] = useState(() => {
         try {
-          const saved = localStorage.getItem('filter_division');
+          const saved = safeLocalStorage.getItem('filter_division');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1372,7 +1524,7 @@
 
       const [collegeFilter, setCollegeFilter] = useState(() => {
         try {
-          const saved = localStorage.getItem('filter_college');
+          const saved = safeLocalStorage.getItem('filter_college');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) return parsed;
@@ -1385,12 +1537,12 @@
 
       // Pagination States
       const [currentPage, setCurrentPage] = useState(() => {
-        const saved = localStorage.getItem('filter_currentPage');
+        const saved = safeLocalStorage.getItem('filter_currentPage');
         const num = saved ? Number(saved) : 1;
         return isNaN(num) || num < 1 ? 1 : num;
       });
       const [pageSize, setPageSize] = useState(() => {
-        const saved = localStorage.getItem('filter_pageSize');
+        const saved = safeLocalStorage.getItem('filter_pageSize');
         const num = saved ? Number(saved) : 15;
         return isNaN(num) || num < 1 ? 15 : num;
       });
@@ -1407,31 +1559,31 @@
 
       // Persistence Sync
       useEffect(() => {
-        localStorage.setItem('filter_search', searchQuery);
+        safeLocalStorage.setItem('filter_search', searchQuery);
       }, [searchQuery]);
 
       useEffect(() => {
-        localStorage.setItem('filter_status', JSON.stringify(statusFilter));
+        safeLocalStorage.setItem('filter_status', JSON.stringify(statusFilter));
       }, [statusFilter]);
 
       useEffect(() => {
-        localStorage.setItem('filter_progress', JSON.stringify(progressFilter));
+        safeLocalStorage.setItem('filter_progress', JSON.stringify(progressFilter));
       }, [progressFilter]);
 
       useEffect(() => {
-        localStorage.setItem('filter_division', JSON.stringify(divisionFilter));
+        safeLocalStorage.setItem('filter_division', JSON.stringify(divisionFilter));
       }, [divisionFilter]);
 
       useEffect(() => {
-        localStorage.setItem('filter_college', JSON.stringify(collegeFilter));
+        safeLocalStorage.setItem('filter_college', JSON.stringify(collegeFilter));
       }, [collegeFilter]);
 
       useEffect(() => {
-        localStorage.setItem('filter_currentPage', String(currentPage));
+        safeLocalStorage.setItem('filter_currentPage', String(currentPage));
       }, [currentPage]);
 
       useEffect(() => {
-        localStorage.setItem('filter_pageSize', String(pageSize));
+        safeLocalStorage.setItem('filter_pageSize', String(pageSize));
       }, [pageSize]);
 
       const safeStatusFilter = useMemo(() => Array.isArray(statusFilter) ? statusFilter : ['Completed', 'In Progress'], [statusFilter]);
@@ -1563,13 +1715,13 @@
         if (onSearchChange) onSearchChange('');
         if (onProgressFilterChange) onProgressFilterChange('All');
         
-        localStorage.removeItem('registryFilter');
-        localStorage.removeItem('progressRangeFilter');
-        localStorage.removeItem('filter_search');
-        localStorage.removeItem('filter_status');
-        localStorage.removeItem('filter_progress');
-        localStorage.removeItem('filter_division');
-        localStorage.removeItem('filter_college');
+         safeLocalStorage.removeItem('registryFilter');
+        safeLocalStorage.removeItem('progressRangeFilter');
+        safeLocalStorage.removeItem('filter_search');
+        safeLocalStorage.removeItem('filter_status');
+        safeLocalStorage.removeItem('filter_progress');
+        safeLocalStorage.removeItem('filter_division');
+        safeLocalStorage.removeItem('filter_college');
       };
 
       return (
@@ -1701,14 +1853,20 @@
                 </button>
                 <button 
                   onClick={() => downloadCSV(filtered, `student_report_${new Date().toISOString().slice(0,10)}.csv`)}
-                  className="flex items-center gap-2 bg-[#12314C] text-white text-[10px] font-black uppercase px-6 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none"
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
                 >
-                  <LucideIcon name="download" className="w-4 h-4 text-brand-green" /> <span>Export Ledger</span>
+                  <LucideIcon name="file-text" className="w-4 h-4 text-brand-green" /> <span>Export CSV</span>
+                </button>
+                <button 
+                  onClick={() => downloadPDF(filtered, `student_report_${new Date().toISOString().slice(0,10)}.pdf`)}
+                  className="flex items-center gap-2 bg-[#12314C] hover:bg-slate-900 text-white text-[10px] font-black uppercase px-5 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all outline-none border border-transparent"
+                >
+                  <LucideIcon name="download" className="w-4 h-4 text-amber-400" /> <span>Export PDF</span>
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <MultiSelectDropdown 
                 label="Process State"
                 options={['Completed', 'In Progress']}
@@ -2054,26 +2212,17 @@
     };
 
     const App = () => {
-      const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'overview');
-      const [registryFilter, setRegistryFilter] = useState(() => localStorage.getItem('registryFilter') || '');
-      const [progressRangeFilter, setProgressRangeFilter] = useState(() => localStorage.getItem('progressRangeFilter') || 'All');
-      const [selectedMonth, setSelectedMonth] = useState(() => localStorage.getItem('selectedMonth') || 'All');
+      const [activeTab, setActiveTab] = useState('overview');
+      const [registryFilter, setRegistryFilter] = useState(() => safeLocalStorage.getItem('registryFilter') || '');
+      const [progressRangeFilter, setProgressRangeFilter] = useState(() => safeLocalStorage.getItem('progressRangeFilter') || 'All');
 
       useEffect(() => {
-        localStorage.setItem('activeTab', activeTab);
-      }, [activeTab]);
-
-      useEffect(() => {
-        localStorage.setItem('registryFilter', registryFilter || '');
+        safeLocalStorage.setItem('registryFilter', registryFilter || '');
       }, [registryFilter]);
 
       useEffect(() => {
-        localStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
+        safeLocalStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
       }, [progressRangeFilter]);
-
-      useEffect(() => {
-        localStorage.setItem('selectedMonth', selectedMonth || 'All');
-      }, [selectedMonth]);
 
       const [data, setData] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -2084,63 +2233,105 @@
       const parseMonthYear = (dateStr) => {
         if (!dateStr) return null;
         
-        const str = String(dateStr).trim();
-        // Match YYYY-MM-DD
-        let match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (match) {
-          const year = parseInt(match[1]);
-          const month = parseInt(match[2]) - 1;
-          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          if (month >= 0 && month < 12) {
-            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
-          }
+        let str = String(dateStr).trim().replace(/\s+/g, ' ');
+        if (!str || str.toLowerCase() === 'not specified' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') {
+          return null;
         }
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const fullMonthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+        // Try to match wordy months first
+        // Example: "27-Nov-23" or "27-Nov-2023" or "27 Nov 2023" or "27-November-2023"
+        let normalizedStr = str.replace(/[-/]/g, ' ').toLowerCase();
+        let words = normalizedStr.split(' ');
         
-        // Match MM/DD/YYYY
-        let matchUS = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-        if (matchUS) {
-          const year = parseInt(matchUS[3]);
-          const month = parseInt(matchUS[1]) - 1;
-          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          if (month >= 0 && month < 12) {
-            return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+        let foundMonthIndex = -1;
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          const idxFull = fullMonthNames.indexOf(w);
+          if (idxFull !== -1) {
+            foundMonthIndex = idxFull;
+            break;
+          }
+          const idxShort = monthNames.map(m => m.toLowerCase()).indexOf(w.substring(0, 3));
+          if (idxShort !== -1 && w.length >= 3) {
+            foundMonthIndex = idxShort;
+            break;
           }
         }
 
+        if (foundMonthIndex !== -1) {
+          let year = null;
+          for (const w of words) {
+            if (/^\d{4}$/.test(w)) {
+              year = parseInt(w);
+              break;
+            }
+          }
+          if (year === null) {
+            for (const w of words) {
+              if (/^\d{2}$/.test(w) && !/^\d{4}$/.test(w)) {
+                const val = parseInt(w);
+                year = 2000 + val;
+                break;
+              }
+            }
+          }
+          if (year !== null) {
+            return {
+              label: `${monthNames[foundMonthIndex]}-${String(year).slice(-2)}`,
+              raw: `${year}-${String(foundMonthIndex + 1).padStart(2, '0')}`
+            };
+          }
+        }
+
+        // Match YYYY-MM-DD or YYYY/MM/DD
+        let matchISO = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (matchISO) {
+          const year = parseInt(matchISO[1]);
+          const month = parseInt(matchISO[2]) - 1;
+          if (month >= 0 && month < 12) {
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+
+        // Match numeric digits: DD/MM/YYYY, DD-MM-YYYY, MM/DD/YYYY, MM-DD-YYYY
+        let matchNumeric = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+        if (matchNumeric) {
+          const num1 = parseInt(matchNumeric[1]);
+          const num2 = parseInt(matchNumeric[2]);
+          let year = parseInt(matchNumeric[3]);
+          if (year < 100) year += 2000;
+
+          if (num1 > 12 && num2 <= 12) {
+            const month = num2 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          } else if (num2 > 12 && num1 <= 12) {
+            const month = num1 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          } else if (num1 <= 12 && num2 <= 12) {
+            const month = num2 - 1;
+            return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          }
+        }
+
+        // Native Date parser fallback
         const date = new Date(str);
         if (!isNaN(date.getTime())) {
-          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
           const year = date.getFullYear();
           const month = date.getMonth();
-          return { label: `${monthNames[month]} ${year}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
+          return { label: `${monthNames[month]}-${String(year).slice(-2)}`, raw: `${year}-${String(month+1).padStart(2, '0')}` };
         }
         
         return null;
       };
 
-      const monthOptions = useMemo(() => {
-        const monthsMap = {};
-        safeData.forEach(student => {
-          const parsed = parseMonthYear(student.startedAt);
-          if (parsed) {
-            monthsMap[parsed.raw] = parsed.label;
-          }
-        });
-        
-        const sortedKeys = Object.keys(monthsMap).sort((a, b) => a.localeCompare(b));
-        return [
-          { value: 'All', label: 'All Months' },
-          ...sortedKeys.map(key => ({ value: key, label: monthsMap[key] }))
-        ];
-      }, [safeData]);
+
 
       const filteredData = useMemo(() => {
-        if (selectedMonth === 'All') return safeData;
-        return safeData.filter(student => {
-          const parsed = parseMonthYear(student.startedAt);
-          return parsed && parsed.raw === selectedMonth;
-        });
-      }, [safeData, selectedMonth]);
+        return safeData;
+      }, [safeData]);
 
       const mockData = useMemo(() => [
         { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
@@ -2177,77 +2368,136 @@
 
         // 2. Try External CSV (GitHub/Public Link) with Cache-Busting
         if (GOOGLE_SHEET_CSV_URL) {
-        console.log("Sync Action: Initializing via CSV Download...");
-        
-        // Add cache-buster to URL to ensure fresh data from GitHub/Servers
-        const cacheBuster = `&cb=${Date.now()}`;
-        const cleanUrl = GOOGLE_SHEET_CSV_URL.trim() + cacheBuster;
-        
-        Papa.parse(cleanUrl, {
-          download: true,
-            header: true,
-            dynamicTyping: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-              if (results.data && results.data.length > 0) {
-                const processed = results.data.map((row, index) => {
-                  let obj = {};
-                  Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
+          console.log("Sync Action: Initializing via CSV Download...");
+          const cacheBuster = (GOOGLE_SHEET_CSV_URL.includes('?') ? '&' : '?') + `cb=${Date.now()}`;
+          const cleanUrl = GOOGLE_SHEET_CSV_URL.trim() + cacheBuster;
 
-                  // Map Logic
-                  const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
-                  const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
-                  const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
-
-                  let completedValue = 0;
-                  const compKey = Object.keys(obj).find(k => 
-                    (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
-                  );
-                  if (compKey) {
-                    let rawVal = obj[compKey];
-                    if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
-                    completedValue = parseFloat(rawVal) || 0;
-                  }
-
-                  const statusStr = String(obj.status || '').toLowerCase();
-                  const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
-
-                  return {
-                    id: index + 1,
-                    firstName: obj.firstname || obj.studentname?.split(' ')[0] || "Student",
-                    lastName: obj.lastname || obj.studentname?.split(' ').slice(1).join(' ') || `#${index+1}`,
-                    email: obj.email || obj.emailid || '',
-                    phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
-                    college: collegeName || 'Unknown ITI',
-                    division: divisionName,
-                    district: obj.district || obj.homedistrict || '',
-                    trade: obj.trade || obj.tradename || obj.subject || '',
-                    status: finalized ? 'Completed' : 'In Progress',
-                    gender: obj.gender || obj.sex || 'Not Specified',
-                    category: obj.category || obj.socialcategory || 'General',
-                    incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
-                    startedAt: obj.startedat || obj.registrationdate || '',
-                    completedAt: obj.completedat || obj.completiondate || '',
-                    completedPercent: finalized ? 100 : completedValue
-                  };
-                });
-                setData(processed);
-                setLastSync(new Date());
-                setIsLive(true);
-              } else {
-                console.warn("Sync Notice: No records found in CSV, using demo data.");
-                setData(mockData);
-                setIsLive(false);
-              }
-              setLoading(false);
-            },
-            error: (err) => {
-              console.error("Sync Failure (Download/Parse):", err);
+          const parseWithPapa = () => {
+            if (typeof window.Papa === 'undefined') {
+              console.warn("Papa is not defined yet. Postponing CSV sync.");
               setData(mockData);
               setLoading(false);
-              setIsLive(false);
+              return;
             }
-          });
+            fetch(cleanUrl)
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error(`Server responded with status ${response.status}`);
+                }
+                return response.text();
+              })
+              .then((csvText) => {
+                window.Papa.parse(csvText, {
+                  header: true,
+                  dynamicTyping: true,
+                  skipEmptyLines: true,
+                  complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                      const processed = results.data.map((row, index) => {
+                        let obj = {};
+                        Object.keys(row).forEach(key => { obj[normalize(key)] = row[key]; });
+
+                        // Map Logic
+                        const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
+                        const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
+                        const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+
+                        let completedValue = 0;
+                        const compKey = Object.keys(obj).find(k => 
+                          (k.includes('percent') || k === 'completed' || k === 'completion' || k.includes('progress')) && !k.includes('at')
+                        );
+                        if (compKey) {
+                          let rawVal = obj[compKey];
+                          if (typeof rawVal === 'string') rawVal = parseFloat(rawVal.replace('%', ''));
+                          completedValue = parseFloat(rawVal) || 0;
+                        }
+
+                        const statusStr = String(obj.status || '').toLowerCase();
+                        const finalized = (statusStr.includes('complete') || statusStr.includes('finish') || completedValue >= 100);
+
+                        return {
+                          id: index + 1,
+                          firstName: obj.firstname || (typeof obj.studentname === 'string' ? obj.studentname.split(' ')[0] : '') || "Student",
+                          lastName: obj.lastname || (typeof obj.studentname === 'string' ? obj.studentname.split(' ').slice(1).join(' ') : '') || `#${index+1}`,
+                          email: obj.email || obj.emailid || '',
+                          phoneNumber: obj.phone || obj.phonenumber || obj.mobile || obj.contact || '',
+                          college: collegeName || 'Unknown ITI',
+                          division: divisionName,
+                          district: obj.district || obj.homedistrict || '',
+                          trade: obj.trade || obj.tradename || obj.subject || '',
+                          status: finalized ? 'Completed' : 'In Progress',
+                          gender: obj.gender || obj.sex || 'Not Specified',
+                          category: obj.category || obj.socialcategory || 'General',
+                          text: obj.text || '',
+                          incomeLevel: obj.incomelevel || obj.familyincome || 'Not Specified',
+                          startedAt: (() => {
+                            const dateKeys = ['startedat', 'registrationdate', 'timestamp', 'createdat', 'submissiondate', 'date', 'datetime', 'enrolledat', 'enrollmentdate', 'joiningdate', 'startingdate'];
+                            for (const dk of dateKeys) {
+                              if (obj[dk]) return obj[dk];
+                            }
+                            const fallbackKey = Object.keys(obj).find(k => 
+                              (k.includes('date') || k.includes('time') || k.endsWith('at') || k.startsWith('start')) && 
+                              !k.includes('completed')
+                            );
+                            return fallbackKey ? obj[fallbackKey] : '';
+                          })(),
+                          completedAt: (() => {
+                            const compDateKeys = ['completedat', 'completiondate', 'completed_at', 'finishdate', 'finishedat', 'completed'];
+                            for (const cdk of compDateKeys) {
+                              if (obj[cdk]) return obj[cdk];
+                            }
+                            const fallbackKey = Object.keys(obj).find(k => 
+                              (k.includes('date') || k.includes('time') || k.endsWith('at')) && 
+                              k.includes('completed')
+                            );
+                            return fallbackKey ? obj[fallbackKey] : '';
+                          })(),
+                          completedPercent: finalized ? 100 : completedValue
+                        };
+                      });
+                      setData(processed);
+                      setLastSync(new Date());
+                      setIsLive(true);
+                    } else {
+                      console.warn("Sync Notice: No records found in CSV, using demo data.");
+                      setData(mockData);
+                      setIsLive(false);
+                    }
+                    setLoading(false);
+                  },
+                  error: (err) => {
+                    console.error("Sync Failure (Parse):", err);
+                    setData(mockData);
+                    setLoading(false);
+                    setIsLive(false);
+                  }
+                });
+              })
+              .catch((err) => {
+                console.error("Sync Failure (Download/Fetch):", err);
+                setData(mockData);
+                setLoading(false);
+                setIsLive(false);
+              });
+          };
+
+          if (typeof window.Papa === 'undefined') {
+            const interval = setInterval(() => {
+              if (typeof window.Papa !== 'undefined') {
+                clearInterval(interval);
+                parseWithPapa();
+              }
+            }, 100);
+            setTimeout(() => {
+              clearInterval(interval);
+              if (loading) {
+                setData(mockData);
+                setLoading(false);
+              }
+            }, 3000);
+          } else {
+            parseWithPapa();
+          }
           return;
         }
 
@@ -2333,28 +2583,6 @@
                 <LucideIcon name="users" className="w-3 h-3" /> Registry
               </button>
             </div>
-            
-            {/* Mobile Month Filter */}
-            <div className="p-3 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <LucideIcon name="calendar" className="w-3.5 h-3.5 text-brand-green" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Filter Month:</span>
-              </div>
-              <div className="relative min-w-[140px]">
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="w-full text-[10px] font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green rounded-lg py-1 px-3.5 pr-8 appearance-none focus:outline-none transition-all"
-                >
-                  {monthOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
-                  <LucideIcon name="chevron-down" className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            </div>
 
             <div className="flex overflow-x-auto no-scrollbar bg-slate-50 p-2 gap-2">
               <a href="https://pehel.medha.org.in/systemAdoption" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -2389,34 +2617,6 @@
                     <LucideIcon name="users" className="w-4 h-4" /> Registry
                   </button>
                 </nav>
-
-                {/* Desktop Month Filter */}
-                <div className="pt-6 border-t border-slate-100">
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Month wise Filter</p>
-                        <div className="h-0.5 w-8 bg-brand-green rounded-full opacity-50"></div>
-                      </div>
-                      <LucideIcon name="calendar" className="w-3.5 h-3.5 text-slate-400" />
-                    </div>
-                    
-                    <div className="relative">
-                      <select
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-brand-green/50 rounded-xl p-2.5 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
-                      >
-                        {monthOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                        <LucideIcon name="chevron-down" className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 <div className="pt-6 border-t border-slate-100">
                   <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
@@ -2482,23 +2682,23 @@
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
-                    localStorage.setItem('filter_search', college);
-                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
-                    localStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
-                    localStorage.setItem('filter_division', JSON.stringify([]));
-                    localStorage.setItem('filter_college', JSON.stringify([]));
-                    localStorage.setItem('filter_currentPage', '1');
+                    safeLocalStorage.setItem('filter_search', college);
+                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    safeLocalStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
+                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter(college);
                     setProgressRangeFilter('All');
                     setActiveTab('students');
                   }}
                   onViewProgressRegistry={(range) => {
-                    localStorage.setItem('filter_search', '');
-                    localStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
-                    localStorage.setItem('filter_progress', JSON.stringify([range]));
-                    localStorage.setItem('filter_division', JSON.stringify([]));
-                    localStorage.setItem('filter_college', JSON.stringify([]));
-                    localStorage.setItem('filter_currentPage', '1');
+                    safeLocalStorage.setItem('filter_search', '');
+                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    safeLocalStorage.setItem('filter_progress', JSON.stringify([range]));
+                    safeLocalStorage.setItem('filter_division', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter('');
                     setProgressRangeFilter(range);
                     setActiveTab('students');
