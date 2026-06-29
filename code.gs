@@ -130,3 +130,8 @@ function getSpreadsheetData() {
     console.error('Data Fetching Critical Error:', error);
     return [];
   }
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
