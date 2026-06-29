@@ -786,7 +786,7 @@
                 <p className="text-brand-green text-[10px] font-bold uppercase tracking-widest opacity-70">Real-time performance distribution</p>
                 {metrics.hasData && (
                   <span className={`flex items-center gap-1 ${isLive ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'} px-2 py-0.5 rounded text-[8px] font-bold uppercase`}>
-                    {isLive ? 'Live Sync Active' : 'Offline / Demo Mode'}
+                    {isLive ? 'Live Sync Active' : (data && data.length > 4) ? 'Offline / Cached Mode' : 'Offline / Demo Mode'}
                   </span>
                 )}
               </div>
@@ -2224,10 +2224,51 @@
         safeLocalStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
       }, [progressRangeFilter]);
 
-      const [data, setData] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [lastSync, setLastSync] = useState(null);
-      const [isLive, setIsLive] = useState(false);
+      const [data, setData] = useState(() => {
+        try {
+          const cached = safeLocalStorage.getItem('cached_student_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.error("Error reading cached student data:", e);
+        }
+        return [];
+      });
+      const [loading, setLoading] = useState(() => {
+        try {
+          const cached = safeLocalStorage.getItem('cached_student_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return false;
+            }
+          }
+        } catch (e) {}
+        return true;
+      });
+      const [lastSync, setLastSync] = useState(() => {
+        try {
+          const savedTime = safeLocalStorage.getItem('last_sync_time');
+          if (savedTime) return new Date(savedTime);
+        } catch (e) {}
+        return null;
+      });
+      const [isLive, setIsLive] = useState(() => {
+        try {
+          const cached = safeLocalStorage.getItem('cached_student_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return true;
+            }
+          }
+        } catch (e) {}
+        return false;
+      });
       const safeData = useMemo(() => Array.isArray(data) ? data : [], [data]);
 
       const parseMonthYear = (dateStr) => {
@@ -2458,26 +2499,33 @@
                       setData(processed);
                       setLastSync(new Date());
                       setIsLive(true);
+                      
+                      try {
+                        safeLocalStorage.setItem('cached_student_data', JSON.stringify(processed));
+                        safeLocalStorage.setItem('last_sync_time', new Date().toISOString());
+                      } catch (e) {
+                        console.warn("Storage write/quota warning:", e);
+                      }
                     } else {
-                      console.warn("Sync Notice: No records found in CSV, using demo data.");
-                      setData(mockData);
-                      setIsLive(false);
+                      console.warn("Sync Notice: No records found in CSV.");
+                      setData(prev => (prev && prev.length > 0) ? prev : mockData);
+                      setIsLive((prev) => (prev || false));
                     }
                     setLoading(false);
                   },
                   error: (err) => {
                     console.error("Sync Failure (Parse):", err);
-                    setData(mockData);
+                    setData(prev => (prev && prev.length > 0) ? prev : mockData);
                     setLoading(false);
-                    setIsLive(false);
+                    setIsLive((prev) => (prev || false));
                   }
                 });
               })
               .catch((err) => {
                 console.error("Sync Failure (Download/Fetch):", err);
-                setData(mockData);
+                setData(prev => (prev && prev.length > 0) ? prev : mockData);
                 setLoading(false);
-                setIsLive(false);
+                setIsLive((prev) => (prev || false));
               });
           };
 
@@ -2491,7 +2539,7 @@
             setTimeout(() => {
               clearInterval(interval);
               if (loading) {
-                setData(mockData);
+                setData(prev => (prev && prev.length > 0) ? prev : mockData);
                 setLoading(false);
               }
             }, 3000);
@@ -2503,7 +2551,7 @@
 
         // 3. Absolute Fallback
         setTimeout(() => {
-          setData(mockData);
+          setData(prev => (prev && prev.length > 0) ? prev : mockData);
           setLoading(false);
           setLastSync(new Date());
           setIsLive(false);
