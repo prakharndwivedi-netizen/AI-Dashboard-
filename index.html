@@ -1306,10 +1306,12 @@
       doc.setTextColor(100, 116, 139);
       doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${data.length}`, 14, 21);
       
-      const headers = [['First Name', 'Last Name', 'College', 'Division', 'District', 'Trade', 'Status', 'Progress (%)', 'Completed At']];
-      const rows = data.map(item => [
+      const headers = [['S.No.', 'First Name', 'Last Name', 'Masked Email', 'College', 'Division', 'District', 'Trade', 'Status', 'Progress (%)', 'Completed At']];
+      const rows = data.map((item, index) => [
+        index + 1,
         item.firstName || '',
         item.lastName || '',
+        item.email ? maskSensitive(item.email) : 'N/A',
         item.college || '',
         item.division || '',
         item.district || '',
@@ -1327,15 +1329,17 @@
         styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [18, 49, 76], textColor: [255, 255, 255], fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 'auto' },
-          3: { cellWidth: 25 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 35 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 15 },
-          8: { cellWidth: 25 }
+          0: { cellWidth: 12 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 'auto' },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 22 },
+          7: { cellWidth: 25 },
+          8: { cellWidth: 16 },
+          9: { cellWidth: 16 },
+          10: { cellWidth: 22 }
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { top: 25, left: 14, right: 14, bottom: 15 },
