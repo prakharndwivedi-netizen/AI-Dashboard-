@@ -388,7 +388,10 @@
 
       const completions = records.filter(isCompleted).length;
       
-      const muzRecords = records.filter(r => String(r.division || '').toLowerCase().includes('muzaffarpur'));
+      const muzRecords = records.filter(r => {
+        const divLower = String(r.division || '').toLowerCase();
+        return divLower.includes('muzaffarpur') || divLower.includes('muzaffapur') || divLower.includes('tirhut');
+      });
       const muzTotal = muzRecords.length;
       const muzCompleted = muzRecords.filter(isCompleted).length;
 
@@ -559,50 +562,159 @@
 
 
 
-    const Dashboard = ({ data, onViewRegistry, onViewProgressRegistry, lastSync, isLive }) => {
-      const [selectedDivision, setSelectedDivision] = useState('All');
-      const [searchQuery, setSearchQuery] = useState('');
+    const Dashboard = ({ data, matrixData = [], onViewRegistry, onViewProgressRegistry, lastSync, isLive }) => {
+      const [statusFilter, setStatusFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_status');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return ['Completed', 'In Progress'];
+      });
+
+      const [progressFilter, setProgressFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_progress');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'];
+      });
+
+      const [divisionFilter, setDivisionFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_division');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
+      });
+
+      const [collegeFilter, setCollegeFilter] = useState(() => {
+        try {
+          const saved = safeLocalStorage.getItem('filter_college');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch(e) {}
+        return [];
+      });
+
+      const [displaySearch, setDisplaySearch] = useState(() => {
+        return safeLocalStorage.getItem('filter_search') || '';
+      });
+      const [searchQuery, setSearchQuery] = useState(() => {
+        return safeLocalStorage.getItem('filter_search') || '';
+      });
+
       const [reportSearch, setReportSearch] = useState('');
       const [reportCollege, setReportCollege] = useState(null);
-      const [showSuggestions, setShowSuggestions] = useState(false);
 
-      const searchContainerRef = useRef(null);
+      // Search debounce
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          setSearchQuery(displaySearch);
+        }, 220);
+        return () => clearTimeout(timer);
+      }, [displaySearch]);
+
+      // Persistence Sync
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_search', searchQuery);
+      }, [searchQuery]);
 
       useEffect(() => {
-        const handleClickOutside = (event) => {
-          if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
-            setShowSuggestions(false);
-          }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }, []);
+        safeLocalStorage.setItem('filter_status', JSON.stringify(statusFilter));
+      }, [statusFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_progress', JSON.stringify(progressFilter));
+      }, [progressFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_division', JSON.stringify(divisionFilter));
+      }, [divisionFilter]);
+
+      useEffect(() => {
+        safeLocalStorage.setItem('filter_college', JSON.stringify(collegeFilter));
+      }, [collegeFilter]);
+
+      const safeStatusFilter = useMemo(() => Array.isArray(statusFilter) ? statusFilter : ['Completed', 'In Progress'], [statusFilter]);
+      const safeProgressFilter = useMemo(() => Array.isArray(progressFilter) ? progressFilter : ['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed'], [progressFilter]);
+      const safeDivisionFilter = useMemo(() => Array.isArray(divisionFilter) ? divisionFilter : [], [divisionFilter]);
+      const safeCollegeFilter = useMemo(() => Array.isArray(collegeFilter) ? collegeFilter : [], [collegeFilter]);
 
       const divisions = useMemo(() => {
         const unique = Array.from(new Set(data.filter(d => d.division).map(d => d.division)));
-        return ['All', ...unique.sort()];
+        return unique.sort();
       }, [data]);
 
-      const uniqueColleges = useMemo(() => {
-        return Array.from(new Set(data.map(d => d.college).filter(Boolean)));
-      }, [data]);
-
-      const suggestions = useMemo(() => {
-        if (!searchQuery.trim()) return [];
-        const matches = uniqueColleges.filter(colName => {
-          if (colName.toLowerCase() === searchQuery.toLowerCase().trim()) return false;
-          return isMatch(colName, searchQuery);
-        });
-        return matches.slice(0, 5);
-      }, [uniqueColleges, searchQuery]);
+      const collegesForDivision = useMemo(() => {
+        let filteredVal = data;
+        if (safeDivisionFilter.length > 0) {
+          filteredVal = data.filter(d => safeDivisionFilter.some(div => {
+            const targetDiv = String(d.division || '').replace(/division/i, '').trim().toLowerCase();
+            const filterDiv = String(div || '').replace(/division/i, '').trim().toLowerCase();
+            const isMuzTarget = targetDiv === 'tirhut' || targetDiv === 'muzaffarpur' || targetDiv === 'muzaffapur';
+            const isMuzFilter = filterDiv === 'tirhut' || filterDiv === 'muzaffarpur' || filterDiv === 'muzaffapur';
+            if (isMuzTarget && isMuzFilter) {
+              return true;
+            }
+            return targetDiv === filterDiv;
+          }));
+        }
+        const unique = Array.from(new Set(filteredVal.filter(d => d.college).map(d => d.college)));
+        return unique.sort();
+      }, [data, safeDivisionFilter]);
 
       const filteredData = useMemo(() => {
-        return data.filter(record => {
-          const matchDivision = selectedDivision === 'All' || record.division === selectedDivision;
-          const matchSearch = isMatch(record.college, searchQuery);
-          return matchDivision && matchSearch;
+        return data.filter(d => {
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch = !q || 
+            String(d.firstName || '').toLowerCase().includes(q) || 
+            String(d.lastName || '').toLowerCase().includes(q) || 
+            String(d.college || '').toLowerCase().includes(q) ||
+            String(d.email || '').toLowerCase().includes(q) ||
+            String(d.phoneNumber || '').toLowerCase().includes(q);
+          
+          let pComp = parseFloat(d.completedPercent);
+          if (isNaN(pComp)) {
+            pComp = d.status === 'Completed' ? 100 : 0;
+          }
+
+          let matchesProgress = true;
+          if (safeProgressFilter.length > 0) {
+            matchesProgress = safeProgressFilter.some(range => {
+              if (range === '0% Completed') return pComp === 0;
+              if (range === '1%-50% Completed') return pComp > 0 && pComp <= 50;
+              if (range === '51%-70% Completed') return pComp > 50 && pComp <= 70;
+              if (range === '71%-99% Completed') return pComp > 70 && pComp < 100;
+              if (range === '100% Completed') return pComp >= 100;
+              return true;
+            });
+          }
+
+          const matchesStatus = safeStatusFilter.length === 0 || safeStatusFilter.includes(d.status);
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.some(div => {
+            const targetDiv = String(d.division || '').replace(/division/i, '').trim().toLowerCase();
+            const filterDiv = String(div || '').replace(/division/i, '').trim().toLowerCase();
+            if ((targetDiv === 'tirhut' || targetDiv === 'muzaffarpur') && (filterDiv === 'tirhut' || filterDiv === 'muzaffarpur')) {
+              return true;
+            }
+            return targetDiv === filterDiv;
+          });
+          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.includes(d.college);
+          
+          return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
         });
-      }, [data, selectedDivision, searchQuery]);
+      }, [data, searchQuery, safeStatusFilter, safeProgressFilter, safeDivisionFilter, safeCollegeFilter]);
 
       const metrics = useMemo(() => getAggregatedMetrics(filteredData), [filteredData]);
       const collegeMetrics = useMemo(() => getCollegeMetrics(filteredData), [filteredData]);
@@ -636,6 +748,174 @@
           })
           .slice(0, 10);
       }, [collegeMetrics]);
+
+      const collegeToDivisionMap = useMemo(() => {
+        const m = {};
+        data.forEach(item => {
+          if (item.college && item.division) {
+            const colKey = String(item.college).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            const divKey = String(item.division).trim();
+            if (!m[colKey]) {
+              m[colKey] = divKey;
+            }
+          }
+        });
+        return m;
+      }, [data]);
+
+      const districtToDivisionMap = useMemo(() => {
+        const m = {};
+        data.forEach(item => {
+          if (item.district && item.division) {
+            const distKey = String(item.district).trim().toLowerCase();
+            const divKey = String(item.division).trim();
+            if (!m[distKey]) {
+              m[distKey] = divKey;
+            }
+          }
+        });
+        return m;
+      }, [data]);
+
+      const enrichedMatrixData = useMemo(() => {
+        return matrixData.map(record => {
+          // Stripping any division/divisions suffixes
+          let origDiv = String(record.division || '').replace(/division/i, '').trim();
+          
+          // Try lookup by college name
+          const normIti = String(record.itiName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          let div = collegeToDivisionMap[normIti];
+          
+          // Try lookup by district
+          if (!div && record.district) {
+            const normDist = String(record.district).trim().toLowerCase();
+            div = districtToDivisionMap[normDist];
+          }
+          
+          // Fallback to normalized original record division
+          if (!div) {
+            div = origDiv || 'Muzaffarpur';
+          }
+          
+          div = String(div).replace(/division/i, '').trim();
+          const divLower = div.toLowerCase();
+          if (divLower === 'tirhut' || divLower === 'muzaffarpur' || divLower === 'muzaffapur') {
+            div = 'Muzaffarpur';
+          } else if (div) {
+            div = div.charAt(0).toUpperCase() + div.slice(1).toLowerCase();
+          }
+          
+          return {
+            ...record,
+            division: div
+          };
+        });
+      }, [matrixData, collegeToDivisionMap, districtToDivisionMap]);
+
+      const filteredMatrixData = useMemo(() => {
+        return enrichedMatrixData.filter(record => {
+          const recordDiv = String(record.division || '').replace(/division/i, '').trim().toLowerCase();
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.some(div => {
+            const d = div.replace(/division/i, '').trim().toLowerCase();
+            const isMuzRecord = recordDiv === 'tirhut' || recordDiv === 'muzaffarpur' || recordDiv === 'muzaffapur';
+            const isMuzFilter = d === 'tirhut' || d === 'muzaffarpur' || d === 'muzaffapur';
+            if (isMuzRecord && isMuzFilter) {
+              return true;
+            }
+            return recordDiv === d;
+          });
+
+          const recordItiNorm = String(record.itiName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.some(colName => {
+            const cNorm = String(colName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return recordItiNorm === cNorm || recordItiNorm.includes(cNorm) || cNorm.includes(recordItiNorm);
+          });
+
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch = !q || 
+            String(record.itiName || '').toLowerCase().includes(q) ||
+            String(record.district || '').toLowerCase().includes(q);
+
+          return matchesDivision && matchesCollege && matchesSearch;
+        });
+      }, [enrichedMatrixData, safeDivisionFilter, safeCollegeFilter, searchQuery]);
+
+      const matrixMetrics = useMemo(() => {
+        let completed = 0;
+        let lessThan50 = 0;
+        let moreThan50 = 0;
+        let notStarted = 0;
+        let grandTotal = 0;
+        let totalSeats = 0;
+        let admitted = 0;
+
+        filteredMatrixData.forEach(item => {
+          completed += typeof item.completed === 'number' ? item.completed : 0;
+          lessThan50 += typeof item.lessThan50 === 'number' ? item.lessThan50 : 0;
+          moreThan50 += typeof item.moreThan50 === 'number' ? item.moreThan50 : 0;
+          notStarted += typeof item.notStarted === 'number' ? item.notStarted : 0;
+          grandTotal += typeof item.grandTotal === 'number' ? item.grandTotal : 0;
+          totalSeats += typeof item.totalSeats === 'number' ? item.totalSeats : 0;
+          admitted += typeof item.admitted === 'number' ? item.admitted : 0;
+        });
+
+        return { completed, lessThan50, moreThan50, notStarted, grandTotal, totalSeats, admitted };
+      }, [filteredMatrixData]);
+
+      const top10ITIsFromMatrix = useMemo(() => {
+        return [...filteredMatrixData]
+          .sort((a, b) => {
+            const compA = typeof a.completed === 'number' ? a.completed : 0;
+            const compB = typeof b.completed === 'number' ? b.completed : 0;
+            return compB - compA;
+          })
+          .slice(0, 10);
+      }, [filteredMatrixData]);
+
+      const zeroProgressColleges = useMemo(() => {
+        return filteredMatrixData
+          .filter(x => {
+            const gt = typeof x.grandTotal === 'number' ? x.grandTotal : 0;
+            const comp = typeof x.completed === 'number' ? x.completed : 0;
+            // Filter colleges where registrations are active (gt > 0) but completions are 0, or completions lag heavily
+            return gt > 0 && (comp === 0 || (comp / gt) <= 0.15);
+          })
+          .sort((a, b) => {
+            const gtA = typeof a.grandTotal === 'number' ? a.grandTotal : 0;
+            const compA = typeof a.completed === 'number' ? a.completed : 0;
+            const gtB = typeof b.grandTotal === 'number' ? b.grandTotal : 0;
+            const compB = typeof b.completed === 'number' ? b.completed : 0;
+            // Sort by absolute lag (registrations - completed) descending
+            return (gtB - compB) - (gtA - compA);
+          });
+      }, [filteredMatrixData]);
+
+      const divisionMetricsFromMatrix = useMemo(() => {
+        const divisionsMap = {};
+        filteredMatrixData.forEach(item => {
+          let div = String(item.division || 'Other').trim();
+          if (!div || div === 'NA' || div === '#N/A') return;
+          div = div.charAt(0).toUpperCase() + div.slice(1).toLowerCase();
+          
+          if (!divisionsMap[div]) {
+            divisionsMap[div] = { registrations: 0, completed: 0, admitted: 0 };
+          }
+          const reg = typeof item.grandTotal === 'number' ? item.grandTotal : 0;
+          const comp = typeof item.completed === 'number' ? item.completed : 0;
+          const adm = typeof item.admitted === 'number' ? item.admitted : 0;
+          
+          divisionsMap[div].registrations += reg;
+          divisionsMap[div].completed += comp;
+          divisionsMap[div].admitted += adm;
+        });
+
+        return Object.entries(divisionsMap).map(([name, stats]) => ({
+          name,
+          registrations: stats.registrations,
+          completed: stats.completed,
+          admitted: stats.admitted
+        })).sort((a, b) => b.registrations - a.registrations);
+      }, [filteredMatrixData]);
 
       const recentPerformance = useMemo(() => getRecentPerformance(filteredData), [filteredData]);
 
@@ -778,78 +1058,94 @@
 
       return (
         <div className="space-y-8 max-w-[1700px] mx-auto pb-12">
-          {/* Header Progress Bar */}
-          <div className="bg-white p-6 rounded-2xl flex flex-col lg:flex-row gap-6 items-center shadow-lg border-l-[12px] border-brand-orange">
-            <div className="w-full lg:w-1/3">
-              <h2 className="text-brand-dark text-xl font-black uppercase tracking-tighter">Live Dataset Analytics</h2>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-brand-green text-[10px] font-bold uppercase tracking-widest opacity-70">Real-time performance distribution</p>
-                {metrics.hasData && (
-                  <span className={`flex items-center gap-1 ${isLive ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'} px-2 py-0.5 rounded text-[8px] font-bold uppercase`}>
-                    {isLive ? 'Live Sync Active' : (data && data.length > 4) ? 'Offline / Cached Mode' : 'Offline / Demo Mode'}
-                  </span>
-                )}
+          {/* Header Progress Bar with Filters */}
+          <div className="bg-white p-6 rounded-2xl flex flex-col gap-6 shadow-lg border-l-[12px] border-brand-orange">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+              <div>
+                <h2 className="text-brand-dark text-xl font-black uppercase tracking-tighter">Live Dataset Analytics</h2>
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="text-brand-green text-[10px] font-bold uppercase tracking-widest opacity-70">Real-time performance distribution</p>
+                  {metrics.hasData && (
+                    <span className={`flex items-center gap-1 ${isLive ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-orange/10 text-brand-orange'} px-2 py-0.5 rounded text-[8px] font-bold uppercase`}>
+                      {isLive ? 'Live Sync Active' : (data && data.length > 4) ? 'Offline / Cached Mode' : 'Offline / Demo Mode'}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            
-            <div className="flex-1 flex flex-col md:flex-row gap-4 items-center justify-center w-full">
-              <select 
-                className="w-full md:w-auto bg-brand-bg border border-slate-200 text-xs font-black uppercase text-brand-dark rounded-xl px-6 py-3 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors"
-                value={selectedDivision}
-                onChange={(e) => setSelectedDivision(e.target.value)}
-              >
-                {divisions.map(d => <option key={d} value={d} className="bg-white">{d}</option>)}
-              </select>
-
-              <div 
-                ref={searchContainerRef}
-                className="relative w-full md:w-96"
-              >
-                <LucideIcon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  placeholder="Scan Colleges..."
-                  className="w-full pl-12 pr-4 py-3 bg-brand-bg border border-slate-200 rounded-xl text-xs font-bold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all inline-block"
-                  value={searchQuery}
-                  onFocus={() => setShowSuggestions(true)}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowSuggestions(true);
+              
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <button 
+                  onClick={() => {
+                    setStatusFilter(['Completed', 'In Progress']);
+                    setProgressFilter(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']);
+                    setDivisionFilter([]);
+                    setCollegeFilter([]);
+                    setDisplaySearch('');
+                    setSearchQuery('');
                   }}
-                />
-                
-                {/* Floating Autocomplete Suggestions Panel */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden text-[11px] font-bold text-brand-dark">
-                    <div className="bg-slate-50 px-4 py-2 text-[8.5px] uppercase tracking-wider text-slate-400 border-b border-slate-100 font-extrabold">
-                      Suggested Colleges
-                    </div>
-                    <ul className="divide-y divide-slate-100 max-h-[220px] overflow-y-auto no-scrollbar">
-                      {suggestions.map((sug, idx) => (
-                        <li 
-                          key={idx}
-                          className="px-4 py-3 hover:bg-brand-green/5 hover:text-brand-green cursor-pointer transition-colors flex items-center gap-2 text-left"
-                          onClick={() => {
-                            setSearchQuery(sug);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          <LucideIcon name="building" className="w-3.5 h-3.5 text-brand-green opacity-70" />
-                          <span className="truncate">{sug}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-6 py-3 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all outline-none border border-slate-200"
+                >
+                  <LucideIcon name="filter-x" className="w-4 h-4 text-brand-orange" /> <span>Clear Filters</span>
+                </button>
+                {lastSync && (
+                  <div className="flex flex-col items-center lg:items-end">
+                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">System Last Synced</span>
+                    <span className="text-[10px] font-black text-brand-green bg-brand-green/5 px-2 py-1 rounded mt-1">{lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="w-full lg:w-1/3 flex justify-center lg:justify-end">
-              {lastSync && (
-                <div className="flex flex-col items-center lg:items-end">
-                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">System Last Synced</span>
-                  <span className="text-[10px] font-black text-brand-green bg-brand-green/5 px-2 py-1 rounded mt-1">{lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
+              <MultiSelectDropdown 
+                label="Process State"
+                options={['Completed', 'In Progress']}
+                selectedValues={safeStatusFilter}
+                onChange={(vals) => setStatusFilter(vals)}
+              />
+
+              <MultiSelectDropdown 
+                label="Progress Range"
+                options={['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']}
+                selectedValues={safeProgressFilter}
+                onChange={(vals) => setProgressFilter(vals)}
+              />
+
+              <MultiSelectDropdown 
+                label="Division Area"
+                options={divisions}
+                selectedValues={safeDivisionFilter}
+                onChange={(vals) => setDivisionFilter(vals)}
+              />
+
+              <MultiSelectDropdown 
+                label="Specific Institution"
+                options={collegesForDivision}
+                selectedValues={safeCollegeFilter}
+                onChange={(vals) => setCollegeFilter(vals)}
+              />
+
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Search</label>
+                <div className="relative">
+                  <LucideIcon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    placeholder="Search name, contact, etc..."
+                    style={{ minHeight: "38px" }}
+                    className="w-full pl-12 pr-8 py-2.5 bg-brand-bg border border-slate-200 rounded-xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-brand-green/20 focus:bg-white transition-all text-brand-dark"
+                    value={displaySearch}
+                    onChange={(e) => setDisplaySearch(e.target.value)}
+                  />
+                  {displaySearch && (
+                    <button 
+                      onClick={() => setDisplaySearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-extrabold text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -878,30 +1174,83 @@
             {/* College Performance Analysis */}
             <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Top 10 Colleges */}
+                {/* 1. Critical Watch - Zero Progress Colleges */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-red-50/20">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-red-600 flex items-center gap-2">
+                      <LucideIcon name="alert-triangle" className="w-4 h-4 text-red-500 animate-pulse" />
+                      Critical Watch: Zero/Low Progress ITIs
+                    </h3>
+                    <span className="bg-red-100 text-red-800 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      {zeroProgressColleges.length} Colleges
+                    </span>
+                  </div>
+                  <div className="h-[350px] p-4 flex flex-col justify-center">
+                    {zeroProgressColleges.length > 0 ? (
+                      <Chart 
+                        type="bar" 
+                        height="100%" 
+                        series={[
+                          {
+                            name: 'Total Registrations',
+                            data: zeroProgressColleges.slice(0, 8).map(x => typeof x.grandTotal === 'number' ? x.grandTotal : 0)
+                          },
+                          {
+                            name: 'Completions',
+                            data: zeroProgressColleges.slice(0, 8).map(x => typeof x.completed === 'number' ? x.completed : 0)
+                          }
+                        ]}
+                        options={{
+                          ...commonOptions,
+                          chart: { toolbar: { show: false } },
+                          plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '65%' } },
+                          colors: ['#EF4444', '#31B89D'],
+                          xaxis: {
+                            categories: zeroProgressColleges.slice(0, 8).map(x => {
+                              let name = x.itiName.replace(/^ITI\s+/i, '').replace(/,\s*SARAN/i, '').replace(/,\s*MUZAFFARPUR/i, '').trim();
+                              return name.length > 15 ? name.substring(0, 13) + '...' : name;
+                            }),
+                            labels: { style: { fontSize: '8px', fontWeight: 900 } }
+                          },
+                          tooltip: {
+                            y: {
+                              formatter: (val) => `${val} Students`
+                            }
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                        <LucideIcon name="check-circle" className="w-10 h-10 text-brand-green mb-2" />
+                        <h4 className="font-black text-[10px] uppercase tracking-wider text-brand-green">All Clear!</h4>
+                        <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Every filtered ITI has active registrations.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Donut Chart - Trainee Progress Status Distribution */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
-                      <LucideIcon name="award" className="w-4 h-4 text-brand-green" />
-                      Top 10 Colleges (Completions)
+                      <LucideIcon name="pie-chart" className="w-4 h-4 text-brand-green" />
+                      ITI Trainee Macro Status (All ITIs)
                     </h3>
                   </div>
-                  <div className="h-[350px] p-4 col-chart-container">
+                  <div className="h-[350px] p-4 flex flex-col justify-center">
                     <Chart 
-                      type="bar" 
+                      type="donut" 
                       height="100%" 
                       series={[
-                        { name: 'Registrations', data: top10Colleges.map(c => c.registrations) },
-                        { name: 'Completions', data: top10Colleges.map(c => c.completions) }
+                        matrixMetrics.completed, 
+                        matrixMetrics.moreThan50, 
+                        matrixMetrics.lessThan50, 
+                        matrixMetrics.notStarted
                       ]}
                       options={{
                         ...commonOptions,
-                        plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
-                        xaxis: { 
-                          categories: top10Colleges.map(c => c.name.length > 20 ? c.name.substring(0, 17) + '...' : c.name), 
-                          labels: { style: { fontSize: '8px', fontWeight: 900 } } 
-                        },
-                        colors: ['#4FD3A8', '#31B89D'],
+                        labels: ['Completed', 'More than 50%', 'Less than 50%', 'Not Started'],
+                        colors: ['#31B89D', '#4FD3A8', '#FFB900', '#EF4444'],
                         legend: {
                           show: true,
                           position: 'bottom',
@@ -912,44 +1261,103 @@
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* Bottom 10 Colleges (0-50% Efficiency) */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange flex items-center gap-2">
-                      <LucideIcon name="alert-circle" className="w-4 h-4 text-brand-orange" />
-                      Critical Watch: Bottom 10 (0-50% Eff.)
-                    </h3>
-                  </div>
-                  <div className="h-[350px] p-4 col-chart-container">
-                    {bottom10Colleges.length > 0 ? (
-                      <Chart 
-                        type="bar" 
-                        height="100%" 
-                        series={[
-                          { name: 'Registrations', data: bottom10Colleges.map(c => c.registrations) },
-                          { name: 'Completions', data: bottom10Colleges.map(c => c.completions) }
-                        ]}
-                        options={{
-                          ...commonOptions,
-                          plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
-                          xaxis: { 
-                            categories: bottom10Colleges.map(c => c.name.length > 20 ? c.name.substring(0, 17) + '...' : c.name), 
-                            labels: { style: { fontSize: '8px', fontWeight: 900 } } 
-                          },
-                          colors: ['#FFB900', '#FF9700'],
-                          legend: {
-                            show: true,
-                            position: 'bottom',
-                            fontSize: '10px',
-                            labels: { colors: '#282828' }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-slate-400 font-bold text-[10px] uppercase">No Colleges in 0-50% Range</div>
-                    )}
-                  </div>
+              {/* Stacked Column Chart - Top 10 ITIs Trainee Breakdown */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange flex items-center gap-2">
+                    <LucideIcon name="bar-chart-2" className="w-4 h-4 text-brand-orange" />
+                    Top 10 Performing ITIs (AI Course Progress Volume)
+                  </h3>
+                  <span className="bg-brand-orange/10 text-brand-orange text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Stacked Progress Volume
+                  </span>
+                </div>
+                <div className="h-[380px] p-4 col-chart-container">
+                  <Chart 
+                    type="bar" 
+                    height="100%" 
+                    series={[
+                      { 
+                        name: 'Completed Registrations', 
+                        data: top10ITIsFromMatrix.map(x => typeof x.completed === 'number' ? x.completed : 0) 
+                      },
+                      { 
+                        name: 'Incomplete Registrations', 
+                        data: top10ITIsFromMatrix.map(x => {
+                          const gt = typeof x.grandTotal === 'number' ? x.grandTotal : 0;
+                          const comp = typeof x.completed === 'number' ? x.completed : 0;
+                          return Math.max(0, gt - comp);
+                        }) 
+                      }
+                    ]}
+                    options={{
+                      ...commonOptions,
+                      chart: { 
+                        stacked: true, 
+                        toolbar: { show: false } 
+                      },
+                      plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+                      xaxis: { 
+                        categories: top10ITIsFromMatrix.map(x => {
+                          let name = x.itiName.replace(/^ITI\s+/i, '').replace(/,\s*SARAN/i, '').replace(/,\s*MUZAFFARPUR/i, '').trim();
+                          return name.length > 15 ? name.substring(0, 13) + '...' : name;
+                        }), 
+                        labels: { style: { fontSize: '8px', fontWeight: 900 } } 
+                      },
+                      colors: ['#31B89D', '#FFB900'],
+                      legend: {
+                        show: true,
+                        position: 'bottom',
+                        fontSize: '10px',
+                        labels: { colors: '#282828' }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Division-wise Bifurcation Chart */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-[#31B89D] flex items-center gap-2">
+                    <LucideIcon name="globe" className="w-4 h-4 text-[#31B89D]" />
+                    Division-wise Registrations vs Completed
+                  </h3>
+                  <span className="bg-brand-green/10 text-brand-green text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Regional Bifurcation
+                  </span>
+                </div>
+                <div className="h-[350px] p-4 col-chart-container">
+                  {divisionMetricsFromMatrix.length > 0 ? (
+                    <Chart 
+                      type="bar" 
+                      height="100%" 
+                      series={[
+                        { name: 'Total Registrations', data: divisionMetricsFromMatrix.map(d => d.registrations) },
+                        { name: 'Completed Registrations', data: divisionMetricsFromMatrix.map(d => d.completed) }
+                      ]}
+                      options={{
+                        ...commonOptions,
+                        chart: { toolbar: { show: false } },
+                        plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+                        xaxis: { 
+                          categories: divisionMetricsFromMatrix.map(d => d.name),
+                          labels: { style: { fontSize: '9px', fontWeight: 900 } }
+                        },
+                        colors: ['#FF9700', '#31B89D'],
+                        legend: {
+                          show: true,
+                          position: 'bottom',
+                          fontSize: '10px',
+                          labels: { colors: '#282828' }
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-slate-400 font-bold text-[10px] uppercase">No Regional Data Found</div>
+                  )}
                 </div>
               </div>
 
@@ -1603,7 +2011,16 @@
       const collegesForDivision = useMemo(() => {
         let filteredVal = data;
         if (safeDivisionFilter.length > 0) {
-          filteredVal = data.filter(d => safeDivisionFilter.includes(d.division));
+          filteredVal = data.filter(d => safeDivisionFilter.some(div => {
+            const targetDiv = String(d.division || '').replace(/division/i, '').trim().toLowerCase();
+            const filterDiv = String(div || '').replace(/division/i, '').trim().toLowerCase();
+            const isMuzTarget = targetDiv === 'tirhut' || targetDiv === 'muzaffarpur' || targetDiv === 'muzaffapur';
+            const isMuzFilter = filterDiv === 'tirhut' || filterDiv === 'muzaffarpur' || filterDiv === 'muzaffapur';
+            if (isMuzTarget && isMuzFilter) {
+              return true;
+            }
+            return targetDiv === filterDiv;
+          }));
         }
         const unique = Array.from(new Set(filteredVal.filter(d => d.college).map(d => d.college)));
         return unique.sort();
@@ -1638,7 +2055,16 @@
           }
 
           const matchesStatus = safeStatusFilter.length === 0 || safeStatusFilter.includes(d.status);
-          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.includes(d.division);
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.some(div => {
+            const targetDiv = String(d.division || '').replace(/division/i, '').trim().toLowerCase();
+            const filterDiv = String(div || '').replace(/division/i, '').trim().toLowerCase();
+            const isMuzTarget = targetDiv === 'tirhut' || targetDiv === 'muzaffarpur' || targetDiv === 'muzaffapur';
+            const isMuzFilter = filterDiv === 'tirhut' || filterDiv === 'muzaffarpur' || filterDiv === 'muzaffapur';
+            if (isMuzTarget && isMuzFilter) {
+              return true;
+            }
+            return targetDiv === filterDiv;
+          });
           const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.includes(d.college);
           
           return matchesSearch && matchesStatus && matchesProgress && matchesDivision && matchesCollege;
@@ -2215,6 +2641,29 @@
       );
     };
 
+    const mockMatrixData = [
+      { id: 1, district: "PATNA", type: "ITI", itiName: "ITI DIGHA GHAT, PATNA", misCode: "GR10000041", totalSeats: 1192, admitted: 954, division: "Patna", completed: 2, lessThan50: 0, moreThan50: 1, notStarted: 1, grandTotal: 4 },
+      { id: 2, district: "SARAN", type: "ITI", itiName: "ITI MARHOWRAH", misCode: "GR10000039", totalSeats: 800, admitted: 779, division: "Muzaffarpur", completed: 59, lessThan50: 19, moreThan50: 9, notStarted: 54, grandTotal: 141 },
+      { id: 3, district: "MUZAFFARPUR", type: "ITI", itiName: "ITI MUZAFFARPUR", misCode: "GR10000052", totalSeats: 716, admitted: 658, division: "Muzaffarpur", completed: 251, lessThan50: 29, moreThan50: 13, notStarted: 137, grandTotal: 430 },
+      { id: 4, district: "ROHTAS", type: "ITI", itiName: "ITI DEHRI-ON-SON, ROHTAS", misCode: "GR10000034", totalSeats: 668, admitted: 613, division: "Patna", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 5, district: "BHAGALPUR", type: "ITI", itiName: "ITI BHAGALPUR", misCode: "GR10000038", totalSeats: 756, admitted: 576, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 6, district: "DARBHANGA", type: "ITI", itiName: "ITI DARBHANGA", misCode: "GR10000037", totalSeats: 680, admitted: 573, division: "Muzaffarpur", completed: 381, lessThan50: 29, moreThan50: 12, notStarted: 226, grandTotal: 648 },
+      { id: 7, district: "EAST CHAMPARAN", type: "ITI", itiName: "ITI MOTIHARI", misCode: "GR10000051", totalSeats: 640, admitted: 565, division: "Muzaffarpur", completed: 64, lessThan50: 21, moreThan50: 7, notStarted: 49, grandTotal: 141 },
+      { id: 8, district: "MUNGER", type: "ITI", itiName: "ITI MUNGER", misCode: "GR10000033", totalSeats: 528, admitted: 499, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 9, district: "BEGUSARAI", type: "ITI", itiName: "ITI BEGUSARAI", misCode: "GR10000040", totalSeats: 516, admitted: 497, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 10, district: "KATIHAR", type: "ITI", itiName: "ITI KATIHAR", misCode: "GR10000036", totalSeats: 620, admitted: 470, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 11, district: "GAYA", type: "ITI", itiName: "ITI GAYA", misCode: "GR10000032", totalSeats: 596, admitted: 464, division: "Patna", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 12, district: "BUXAR", type: "ITI", itiName: "ITI BUXAR", misCode: "GR10000044", totalSeats: 464, admitted: 453, division: "Patna", completed: 1, lessThan50: 0, moreThan50: 0, notStarted: 2, grandTotal: 3 },
+      { id: 13, district: "GOPALGANJ", type: "ITI", itiName: "ITI HATHWA", misCode: "GR10000042", totalSeats: 420, admitted: 362, division: "Muzaffarpur", completed: 65, lessThan50: 14, moreThan50: 8, notStarted: 68, grandTotal: 155 },
+      { id: 14, district: "SITAMARHI", type: "ITI", itiName: "ITI SITAMARHI", misCode: "GR10000046", totalSeats: 388, admitted: 361, division: "Muzaffarpur", completed: 150, lessThan50: 1, moreThan50: 1, notStarted: 54, grandTotal: 206 },
+      { id: 15, district: "PASCHIM CHAMPARAN", type: "ITI", itiName: "ITI BETTIAH", misCode: "GR10000049", totalSeats: 388, admitted: 341, division: "Muzaffarpur", completed: 136, lessThan50: 26, moreThan50: 12, notStarted: 105, grandTotal: 279 },
+      { id: 16, district: "NAWADA", type: "ITI", itiName: "ITI NAWADA", misCode: "GR10000050", totalSeats: 380, admitted: 332, division: "Patna", completed: 30, lessThan50: 20, moreThan50: 2, notStarted: 45, grandTotal: 97 },
+      { id: 17, district: "NALANDA", type: "ITI", itiName: "ITI KALYANBIGHA, NALANDA", misCode: "GR10001211", totalSeats: 300, admitted: 265, division: "Patna", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 1, grandTotal: 1 },
+      { id: 18, district: "SUPAUL", type: "ITI", itiName: "ITI SUPAUL", misCode: "GR10000047", totalSeats: 304, admitted: 265, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 19, district: "ARARIA", type: "ITI", itiName: "ITI FORBESGANJ", misCode: "GR10000045", totalSeats: 348, admitted: 248, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 },
+      { id: 20, district: "SUPAUL", type: "ITI", itiName: "ITI BIRPUR", misCode: "GR10000043", totalSeats: 340, admitted: 218, division: "Begusarai", completed: 0, lessThan50: 0, moreThan50: 0, notStarted: 0, grandTotal: 0 }
+    ];
+
     const App = () => {
       const [activeTab, setActiveTab] = useState('overview');
       const [registryFilter, setRegistryFilter] = useState(() => safeLocalStorage.getItem('registryFilter') || '');
@@ -2227,6 +2676,21 @@
       useEffect(() => {
         safeLocalStorage.setItem('progressRangeFilter', progressRangeFilter || 'All');
       }, [progressRangeFilter]);
+
+      const [matrixData, setMatrixData] = useState(() => {
+        try {
+          const cached = safeLocalStorage.getItem('cached_matrix_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.error("Error reading cached matrix data:", e);
+        }
+        return mockMatrixData;
+      });
 
       const [data, setData] = useState(() => {
         try {
@@ -2273,7 +2737,24 @@
         } catch (e) {}
         return false;
       });
-      const safeData = useMemo(() => Array.isArray(data) ? data : [], [data]);
+      const safeData = useMemo(() => {
+        const rawList = Array.isArray(data) ? data : [];
+        return rawList.map(item => {
+          let div = String(item.division || 'Unassigned').replace(/division/i, '').trim();
+          const divLower = div.toLowerCase();
+          if (divLower === 'tirhut' || divLower === 'muzaffarpur' || divLower === 'muzaffapur') {
+            div = 'Muzaffarpur';
+          } else if (divLower === 'unassigned' || !div) {
+            div = 'Unassigned';
+          } else {
+            div = div.charAt(0).toUpperCase() + div.slice(1).toLowerCase();
+          }
+          return {
+            ...item,
+            division: div
+          };
+        });
+      }, [data]);
 
       const parseMonthYear = (dateStr) => {
         if (!dateStr) return null;
@@ -2385,6 +2866,102 @@
         { firstName: "Priyanka", lastName: "Devi", college: "WITI Muzaffarpur", status: "Completed", division: "Muzaffarpur", gender: "Female", incomeLevel: "Low", trade: "COPA", category: "General", completedPercent: 100, startedAt: "2023-11-05", completedAt: "2023-12-15", phoneNumber: "9876543213", email: "p.devi@example.com" },
       ], []);
 
+      const fetchMatrix = () => {
+        if (typeof window.Papa === 'undefined') {
+          console.warn("Papa not loaded yet for matrix fetch");
+          return;
+        }
+        const parseNumOrNA = (val) => {
+          if (val === undefined || val === null) return 0;
+          const s = String(val).trim();
+          if (s === '' || s === '#N/A' || s === 'N/A' || s === 'NA' || s === '#NA' || s.toLowerCase() === 'na') {
+            return 0;
+          }
+          const n = Number(s.replace(/,/g, ''));
+          return isNaN(n) ? 0 : n;
+        };
+
+        const matrixUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9DApK8KKyzzUcIJK_EbtPCyAYVOqYLndR5O9obqyZoVBJzt5Yr10LYhEkrUEIkUzucVNhBkF2srgh/pub?output=csv&gid=1599895062";
+        const matrixCacheBuster = `&cb=${Date.now()}`;
+        fetch(matrixUrl + matrixCacheBuster)
+          .then(res => {
+            if (!res.ok) throw new Error("Matrix fetch status: " + res.status);
+            return res.text();
+          })
+          .then(csvText => {
+            window.Papa.parse(csvText, {
+              header: true,
+              dynamicTyping: true,
+              skipEmptyLines: true,
+              complete: (results) => {
+                if (results.data && results.data.length > 0) {
+                  const processed = results.data.map((row, index) => {
+                    const norm = (k) => String(k).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                    let obj = {};
+                    Object.keys(row).forEach(k => { obj[norm(k)] = row[k]; });
+
+                    const rawItiName = obj['nameofiti'] || obj['nameoftheiti'] || obj['itiname'] || '';
+                    const rawDistrict = obj['district'] || '';
+                    const rawType = obj['type'] || '';
+                    const rawMisCode = obj['itimiscode'] || '';
+                    const rawTotalSeats = obj['totalseats'] || 0;
+                    const rawAdmitted = obj['admitted'] || 0;
+                    
+                    let divisionStr = 'Muzaffarpur';
+                    const divRaw = obj['division'] || obj['zone'] || obj['region'];
+                    if (divRaw) {
+                      if (Array.isArray(divRaw)) {
+                        divisionStr = divRaw[divRaw.length - 1] || divRaw[0];
+                      } else {
+                        divisionStr = String(divRaw);
+                      }
+                    }
+                    divisionStr = String(divisionStr).replace(/division/i, '').trim();
+                    const divLower = divisionStr.toLowerCase();
+                    if (divLower === 'tirhut' || divLower === 'muzaffarpur' || divLower === 'muzaffapur') {
+                      divisionStr = 'Muzaffarpur';
+                    } else if (divisionStr) {
+                      divisionStr = divisionStr.charAt(0).toUpperCase() + divisionStr.slice(1).toLowerCase();
+                    }
+
+                    const rawCompleted = obj['completed'] || obj['complete'] || '';
+                    const rawLessThan50 = obj['lessthan50'] || obj['lessthan50percent'] || obj['under50'] || '';
+                    const rawMoreThan50 = obj['morethan50'] || obj['morethan50percent'] || obj['over50'] || '';
+                    const rawNotStarted = obj['notstarted'] || obj['unstarted'] || '';
+                    const rawGrandTotal = obj['grandtotal'] || obj['total'] || '';
+
+                    return {
+                      id: index + 1,
+                      district: String(rawDistrict).trim(),
+                      type: String(rawType).trim(),
+                      itiName: String(rawItiName).trim(),
+                      misCode: String(rawMisCode).trim(),
+                      totalSeats: parseNumOrNA(rawTotalSeats),
+                      admitted: parseNumOrNA(rawAdmitted),
+                      completed: parseNumOrNA(rawCompleted),
+                      lessThan50: parseNumOrNA(rawLessThan50),
+                      moreThan50: parseNumOrNA(rawMoreThan50),
+                      notStarted: parseNumOrNA(rawNotStarted),
+                      grandTotal: parseNumOrNA(rawGrandTotal),
+                      division: divisionStr.trim()
+                    };
+                  }).filter(item => item.itiName && item.itiName.toLowerCase() !== 'total' && !item.itiName.toLowerCase().includes('grand'));
+                  
+                  setMatrixData(processed);
+                  try {
+                    safeLocalStorage.setItem('cached_matrix_data', JSON.stringify(processed));
+                  } catch (e) {
+                    console.warn("Storage write failed for matrixData:", e);
+                  }
+                }
+              }
+            });
+          })
+          .catch(err => {
+            console.error("Matrix Sync Failure:", err);
+          });
+      };
+
       const fetchData = async () => {
         const normalize = (key) => String(key).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 
@@ -2424,6 +3001,7 @@
               setLoading(false);
               return;
             }
+            fetchMatrix();
             fetch(cleanUrl)
               .then((response) => {
                 if (!response.ok) {
@@ -2445,7 +3023,15 @@
                         // Map Logic
                         const rawCollege = obj.college || obj.itiname || obj.itipname || obj.institution || '';
                         const collegeName = String(rawCollege).replace(/^Government Industrial Training Institute\s+/i, 'GITI ').trim();
-                        const divisionName = obj.division || obj.zone || obj.region || 'Unassigned';
+                        
+                        let rawDivision = obj.division || obj.zone || obj.region || 'Unassigned';
+                        let divisionName = String(rawDivision).replace(/division/i, '').trim();
+                        const divLower = divisionName.toLowerCase();
+                        if (divLower === 'tirhut' || divLower === 'muzaffarpur' || divLower === 'muzaffapur') {
+                          divisionName = 'Muzaffarpur';
+                        } else if (divisionName) {
+                          divisionName = divisionName.charAt(0).toUpperCase() + divisionName.slice(1).toLowerCase();
+                        }
 
                         let completedValue = 0;
                         const compKey = Object.keys(obj).find(k => 
@@ -2731,6 +3317,7 @@
               {activeTab === 'overview' ? (
                 <Dashboard 
                   data={filteredData} 
+                  matrixData={matrixData}
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
