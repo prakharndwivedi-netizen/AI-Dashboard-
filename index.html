@@ -526,6 +526,17 @@
 
     const maskEmail = maskSensitive; // Alias for backward compatibility
 
+    const formatCollegeName = (rawName) => {
+      if (!rawName) return '';
+      return String(rawName)
+        .replace(/\s+/g, ' ')
+        .replace(/^(Government|Govt\.?)\s+Industrial\s+Training\s+Institute\b/i, 'GITI')
+        .replace(/^Women['’sS]*\s+Industrial\s+Training\s+Institute\b/i, 'WITI')
+        .replace(/^Govt\.?\s+ITI\b/i, 'GITI')
+        .replace(/^(WITI|GITI),\s*/i, '$1 ')
+        .trim();
+    };
+
     const GOALS_MOCK = [
       { institution: "ITI Narkatiyaganj", totalAdmissions: 200, registered: 180, totalCompleted: 150 },
       { institution: "ITI Jhanjharpur", totalAdmissions: 150, registered: 140, totalCompleted: 110 },
@@ -562,7 +573,16 @@
 
 
 
-    const Dashboard = ({ data, matrixData = [], onViewRegistry, onViewProgressRegistry, lastSync, isLive }) => {
+    const Dashboard = ({ 
+      data, 
+      matrixData = [], 
+      reviewDepartmentData = [],
+      onViewRegistry, 
+      onViewProgressRegistry, 
+      onViewDivisionRegistry,
+      lastSync, 
+      isLive 
+    }) => {
       const [statusFilter, setStatusFilter] = useState(() => {
         try {
           const saved = safeLocalStorage.getItem('filter_status');
@@ -807,6 +827,7 @@
           
           return {
             ...record,
+            itiName: formatCollegeName(record.itiName),
             division: div
           };
         });
@@ -872,23 +893,74 @@
           .slice(0, 10);
       }, [filteredMatrixData]);
 
+      const reviewDeptGroupedColleges = useMemo(() => {
+        const collegeMap = new Map();
+        reviewDepartmentData.forEach((row) => {
+          const rawCollege = row.college || '';
+          if (!rawCollege) return;
+          const college = formatCollegeName(rawCollege);
+          
+          const pct = typeof row.completedPercent === 'number' ? row.completedPercent : 0;
+          const isCompleted = String(row.status || '').toLowerCase() === 'completed' || pct >= 100;
+
+          if (!collegeMap.has(college)) {
+            collegeMap.set(college, { 
+              itiName: college, 
+              grandTotal: 0, 
+              completed: 0, 
+              division: String(row.division || '').trim() 
+            });
+          }
+          const stats = collegeMap.get(college);
+          stats.grandTotal++;
+          if (isCompleted) stats.completed++;
+        });
+
+        return Array.from(collegeMap.values());
+      }, [reviewDepartmentData]);
+
       const zeroProgressColleges = useMemo(() => {
-        return filteredMatrixData
+        const filtered = reviewDeptGroupedColleges.filter(record => {
+          const recordDiv = String(record.division || '').replace(/division/i, '').trim().toLowerCase();
+          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.some(div => {
+            const d = div.replace(/division/i, '').trim().toLowerCase();
+            const isMuzRecord = recordDiv === 'tirhut' || recordDiv === 'muzaffarpur' || recordDiv === 'muzaffapur';
+            const isMuzFilter = d === 'tirhut' || d === 'muzaffarpur' || d === 'muzaffapur';
+            if (isMuzRecord && isMuzFilter) {
+              return true;
+            }
+            return recordDiv === d;
+          });
+
+          const recordItiNorm = String(record.itiName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.some(colName => {
+            const cNorm = String(colName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return recordItiNorm === cNorm || recordItiNorm.includes(cNorm) || cNorm.includes(recordItiNorm);
+          });
+
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch = !q || 
+            String(record.itiName || '').toLowerCase().includes(q) ||
+            String(record.division || '').toLowerCase().includes(q);
+
+          return matchesDivision && matchesCollege && matchesSearch;
+        });
+
+        return filtered
           .filter(x => {
             const gt = typeof x.grandTotal === 'number' ? x.grandTotal : 0;
             const comp = typeof x.completed === 'number' ? x.completed : 0;
-            // Filter colleges where registrations are active (gt > 0) but completions are 0, or completions lag heavily
-            return gt > 0 && (comp === 0 || (comp / gt) <= 0.15);
+            if (gt < 15) return true;
+            return (comp / gt) < 0.30;
           })
           .sort((a, b) => {
             const gtA = typeof a.grandTotal === 'number' ? a.grandTotal : 0;
             const compA = typeof a.completed === 'number' ? a.completed : 0;
             const gtB = typeof b.grandTotal === 'number' ? b.grandTotal : 0;
             const compB = typeof b.completed === 'number' ? b.completed : 0;
-            // Sort by absolute lag (registrations - completed) descending
             return (gtB - compB) - (gtA - compA);
           });
-      }, [filteredMatrixData]);
+      }, [reviewDeptGroupedColleges, safeDivisionFilter, safeCollegeFilter, searchQuery]);
 
       const divisionMetricsFromMatrix = useMemo(() => {
         const divisionsMap = {};
@@ -1176,16 +1248,35 @@
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* 1. Critical Watch - Zero Progress Colleges */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-red-50/20">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-red-600 flex items-center gap-2">
-                      <LucideIcon name="alert-triangle" className="w-4 h-4 text-red-500 animate-pulse" />
-                      Critical Watch: Zero/Low Progress ITIs
-                    </h3>
-                    <span className="bg-red-100 text-red-800 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      {zeroProgressColleges.length} Colleges
-                    </span>
+                  <div className="p-4 border-b border-slate-100 bg-red-50/20 flex flex-col gap-3">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-red-600 flex items-center gap-2">
+                        <LucideIcon name="alert-triangle" className="w-4 h-4 text-red-500 animate-pulse" />
+                        Critical Watch: Zero/Low Progress ITIs
+                      </h3>
+                      <span className="bg-red-100 text-red-800 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                        {zeroProgressColleges.length} Colleges
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2 text-[9px] font-bold text-slate-500">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Trigger Rules:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-100 text-rose-700 text-[8.5px] font-extrabold uppercase tracking-wide">
+                          <span className="w-1 h-1 rounded-full bg-rose-500 animate-pulse"></span>
+                          Registrations &lt; 15
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-100 text-rose-700 text-[8.5px] font-extrabold uppercase tracking-wide">
+                          <span className="w-1 h-1 rounded-full bg-rose-500 animate-pulse"></span>
+                          Completion &lt; 30%
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[8px] font-semibold uppercase tracking-wider">
+                          Source: Dept Review
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-[350px] p-4 flex flex-col justify-center">
+                  <div className="h-[520px] p-4 flex flex-col justify-center">
                     {zeroProgressColleges.length > 0 ? (
                       <Chart 
                         type="bar" 
@@ -1193,20 +1284,32 @@
                         series={[
                           {
                             name: 'Total Registrations',
-                            data: zeroProgressColleges.slice(0, 8).map(x => typeof x.grandTotal === 'number' ? x.grandTotal : 0)
+                            data: zeroProgressColleges.slice(0, 15).map(x => typeof x.grandTotal === 'number' ? x.grandTotal : 0)
                           },
                           {
                             name: 'Completions',
-                            data: zeroProgressColleges.slice(0, 8).map(x => typeof x.completed === 'number' ? x.completed : 0)
+                            data: zeroProgressColleges.slice(0, 15).map(x => typeof x.completed === 'number' ? x.completed : 0)
                           }
                         ]}
                         options={{
                           ...commonOptions,
-                          chart: { toolbar: { show: false } },
+                          chart: { 
+                            toolbar: { show: false },
+                            events: {
+                              dataPointSelection: (event, chartContext, config) => {
+                                const idx = config.dataPointIndex;
+                                if (idx !== undefined && idx !== null && zeroProgressColleges[idx]) {
+                                  if (onViewRegistry) {
+                                    onViewRegistry(zeroProgressColleges[idx].itiName);
+                                  }
+                                }
+                              }
+                            }
+                          },
                           plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '65%' } },
                           colors: ['#EF4444', '#31B89D'],
                           xaxis: {
-                            categories: zeroProgressColleges.slice(0, 8).map(x => {
+                            categories: zeroProgressColleges.slice(0, 15).map(x => {
                               let name = x.itiName.replace(/^ITI\s+/i, '').replace(/,\s*SARAN/i, '').replace(/,\s*MUZAFFARPUR/i, '').trim();
                               return name.length > 15 ? name.substring(0, 13) + '...' : name;
                             }),
@@ -1237,7 +1340,7 @@
                       ITI Trainee Macro Status (All ITIs)
                     </h3>
                   </div>
-                  <div className="h-[350px] p-4 flex flex-col justify-center">
+                  <div className="h-[520px] p-4 flex flex-col justify-center">
                     <Chart 
                       type="donut" 
                       height="100%" 
@@ -1263,50 +1366,84 @@
                 </div>
               </div>
 
-              {/* Stacked Column Chart - Top 10 ITIs Trainee Breakdown */}
+              {/* Clustered Column & Line Chart - Top 10 ITIs Trainee Breakdown */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-orange flex items-center gap-2">
                     <LucideIcon name="bar-chart-2" className="w-4 h-4 text-brand-orange" />
                     Top 10 Performing ITIs (AI Course Progress Volume)
                   </h3>
+                  <p className="text-[8px] font-extrabold text-brand-orange uppercase tracking-widest hidden md:block">Click a bar to filter registry</p>
                   <span className="bg-brand-orange/10 text-brand-orange text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    Stacked Progress Volume
+                    Clustered Line Graph
                   </span>
                 </div>
                 <div className="h-[380px] p-4 col-chart-container">
                   <Chart 
-                    type="bar" 
+                    type="line" 
                     height="100%" 
                     series={[
                       { 
                         name: 'Completed Registrations', 
+                        type: 'column',
                         data: top10ITIsFromMatrix.map(x => typeof x.completed === 'number' ? x.completed : 0) 
                       },
                       { 
-                        name: 'Incomplete Registrations', 
-                        data: top10ITIsFromMatrix.map(x => {
-                          const gt = typeof x.grandTotal === 'number' ? x.grandTotal : 0;
-                          const comp = typeof x.completed === 'number' ? x.completed : 0;
-                          return Math.max(0, gt - comp);
-                        }) 
+                        name: 'Total Registrations', 
+                        type: 'column',
+                        data: top10ITIsFromMatrix.map(x => typeof x.grandTotal === 'number' ? x.grandTotal : 0) 
+                      },
+                      {
+                        name: 'Admitted Strength',
+                        type: 'line',
+                        data: top10ITIsFromMatrix.map(x => typeof x.admitted === 'number' ? x.admitted : 0)
                       }
                     ]}
                     options={{
                       ...commonOptions,
                       chart: { 
-                        stacked: true, 
-                        toolbar: { show: false } 
+                        stacked: false, 
+                        toolbar: { show: false },
+                        events: {
+                          dataPointSelection: (event, chartContext, config) => {
+                            const idx = config.dataPointIndex;
+                            if (idx !== undefined && idx !== null && top10ITIsFromMatrix[idx]) {
+                              if (onViewRegistry) {
+                                onViewRegistry(top10ITIsFromMatrix[idx].itiName);
+                              }
+                            }
+                          }
+                        }
+                      },
+                      stroke: {
+                        width: [0, 0, 3],
+                        curve: 'smooth'
                       },
                       plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
                       xaxis: { 
                         categories: top10ITIsFromMatrix.map(x => {
-                          let name = x.itiName.replace(/^ITI\s+/i, '').replace(/,\s*SARAN/i, '').replace(/,\s*MUZAFFARPUR/i, '').trim();
-                          return name.length > 15 ? name.substring(0, 13) + '...' : name;
+                          return x.itiName
+                            .replace(/^Government Industrial Training Institute\s+/i, '')
+                            .replace(/^Govt\s+Industrial\s+Training\s+Institute\s+/i, '')
+                            .replace(/^Govt\s+ITI\s+/i, '')
+                            .replace(/^ITI\s+/i, '')
+                            .replace(/,\s*SARAN/i, '')
+                            .replace(/,\s*MUZAFFARPUR/i, '')
+                            .replace(/,\s*VAISHALI/i, '')
+                            .replace(/,\s*EAST CHAMPARAN/i, '')
+                            .replace(/,\s*WEST CHAMPARAN/i, '')
+                            .trim();
                         }), 
-                        labels: { style: { fontSize: '8px', fontWeight: 900 } } 
+                        labels: { 
+                          show: true,
+                          rotate: -45, 
+                          rotateAlways: true, 
+                          minHeight: 85,
+                          maxHeight: 120,
+                          style: { fontSize: '8px', fontWeight: 800 } 
+                        } 
                       },
-                      colors: ['#31B89D', '#FFB900'],
+                      colors: ['#31B89D', '#FFB900', '#EF4444'],
                       legend: {
                         show: true,
                         position: 'bottom',
@@ -1340,7 +1477,19 @@
                       ]}
                       options={{
                         ...commonOptions,
-                        chart: { toolbar: { show: false } },
+                        chart: { 
+                          toolbar: { show: false },
+                          events: {
+                            dataPointSelection: (event, chartContext, config) => {
+                              const idx = config.dataPointIndex;
+                              if (idx !== undefined && idx !== null && divisionMetricsFromMatrix[idx]) {
+                                if (onViewDivisionRegistry) {
+                                  onViewDivisionRegistry(divisionMetricsFromMatrix[idx].name);
+                                }
+                              }
+                            }
+                          }
+                        },
                         plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
                         xaxis: { 
                           categories: divisionMetricsFromMatrix.map(d => d.name),
@@ -2419,81 +2568,94 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Desktop/Tablet View: Table representation */}
+          </div>          {/* Desktop/Tablet View: Table representation */}
           <div className="hidden md:block bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
             <table className="w-full text-left">
-              <thead className="bg-[#12314C] text-white text-[10px] font-black uppercase tracking-[0.2em] border-b border-brand-green/20">
+              <thead className="bg-[#12314C] text-white text-[9px] font-black uppercase tracking-[0.15em] border-b border-brand-green/20">
                 <tr>
-                  <th className="px-10 py-7">Candidate Metadata</th>
-                  <th className="px-10 py-7">Academic Attribution</th>
-                  <th className="px-10 py-7 text-center">% Completed</th>
-                  <th className="px-10 py-7 text-center">Status Flag</th>
-                  <th className="px-10 py-7">Trade Designation</th>
+                  <th className="px-4 py-4 text-center w-12">#</th>
+                  <th className="px-6 py-4">Candidate Profile</th>
+                  <th className="px-6 py-4">Academic Attribution</th>
+                  <th className="px-6 py-4">Trade Designation</th>
+                  <th className="px-6 py-4 text-center">Course Progress</th>
+                  <th className="px-6 py-4 text-center">Status Flag</th>
                 </tr>
               </thead>
               <tbody className="text-xs text-brand-dark">
-                {paginatedData.map((s, i) => (
-                  <tr key={s.id || i} className="border-b border-slate-100 hover:bg-brand-green/[0.04] transition-all group cursor-pointer" onClick={() => setSelectedStudent(s)}>
-                    <td className="px-10 py-6">
-                      <div className="flex flex-col">
-                        <span className="font-black text-[15px] group-hover:text-brand-green transition-colors tracking-tight uppercase leading-none">{s.firstName} {s.lastName}</span>
-                        <div className="flex gap-4 mt-2">
-                          <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
-                            <LucideIcon name="mail" className="w-2.5 h-2.5 text-brand-green" />
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.email ? maskSensitive(s.email) : 'NO EMAIL'}</span>
+                {paginatedData.map((s, i) => {
+                  const serialNo = (currentPage - 1) * pageSize + i + 1;
+                  return (
+                    <tr key={s.id || i} className="border-b border-slate-100 hover:bg-brand-green/[0.04] transition-all group cursor-pointer" onClick={() => setSelectedStudent(s)}>
+                      <td className="px-4 py-4 text-center text-slate-400 font-mono text-[10px] font-bold">
+                        {serialNo}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-green to-brand-green-light flex items-center justify-center shadow-sm text-white shrink-0 font-extrabold text-[11px] select-none">
+                            {s.firstName ? s.firstName[0] : 'S'}{s.lastName ? s.lastName[0] : ''}
                           </div>
-                          {s.phoneNumber && (
-                            <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
-                              <LucideIcon name="phone" className="w-2.5 h-2.5 text-brand-orange" />
-                              <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{maskSensitive(s.phoneNumber)}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-[13px] text-slate-800 tracking-tight uppercase group-hover:text-brand-green transition-colors leading-none truncate">{s.firstName} {s.lastName}</span>
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 text-[9.5px] text-slate-500 font-semibold uppercase tracking-wider">
+                                <LucideIcon name="mail" className="w-3 h-3 text-brand-green shrink-0" />
+                                {s.email ? maskSensitive(s.email) : 'N/A'}
+                              </span>
+                              {s.phoneNumber && (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] text-slate-500 font-semibold uppercase tracking-wider">
+                                  <LucideIcon name="phone" className="w-3 h-3 text-brand-orange shrink-0" />
+                                  {maskSensitive(s.phoneNumber)}
+                                </span>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className="flex flex-col">
-                        <span className="font-black text-slate-600 uppercase tracking-tighter text-xs group-hover:text-brand-dark transition-colors">{s.college}</span>
-                        <div className="flex items-center gap-1 mt-1">
-                          <LucideIcon name="map-pin" className="w-2 h-2 text-brand-green/40" />
-                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-[0.15em]">{s.division} DIVISION</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-700 uppercase tracking-tight text-[11px] leading-tight break-words">{s.college}</span>
+                          <div className="flex items-center gap-1 mt-1">
+                            <LucideIcon name="map-pin" className="w-2.5 h-2.5 text-brand-green/60" />
+                            <span className="text-[8.5px] text-slate-400 font-black uppercase tracking-widest">{s.division} DIVISION</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className="flex flex-col items-center justify-center">
-                        <span className="font-black text-[12px] text-brand-dark mb-1">{s.completedPercent}%</span>
-                        <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${s.completedPercent >= 100 ? 'bg-brand-green' : s.completedPercent >= 50 ? 'bg-[#FFB900]' : 'bg-brand-orange'}`}
-                            style={{ width: `${s.completedPercent}%` }}
-                          ></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-black tracking-wider text-slate-600 uppercase">
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'Completed' ? 'bg-brand-green' : 'bg-brand-orange'}`}></span>
+                            {s.trade}
+                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className="flex justify-center">
-                        <span className={`px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-[0.15em] shadow-sm transition-all group-hover:scale-105 ${s.status === 'Completed' ? 'bg-brand-green text-white shadow-brand-green/20' : 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20'}`}>
-                           {s.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${s.status === 'Completed' ? 'bg-brand-green' : 'bg-brand-orange animate-pulse'}`}></div>
-                          <span className="font-black uppercase tracking-[0.15em] text-[11px] text-slate-700">{s.trade}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="font-black text-[11px] text-brand-dark mb-1">{s.completedPercent}%</span>
+                          <div className="w-28 bg-slate-100 h-1 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${s.completedPercent >= 100 ? 'bg-brand-green' : s.completedPercent >= 50 ? 'bg-[#FFB900]' : 'bg-brand-orange'}`}
+                              style={{ width: `${s.completedPercent}%` }}
+                            ></div>
+                          </div>
                         </div>
-                        <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest mt-1 ml-4">Qualified Skill Domain</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex justify-center">
+                          <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full font-black uppercase text-[8.5px] tracking-widest border transition-all ${
+                            s.status === 'Completed' 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {s.status}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-10 py-20 text-center">
+                    <td colSpan="6" className="px-10 py-20 text-center">
                       <div className="flex flex-col items-center">
                         <LucideIcon name="shield-alert" className="w-12 h-12 text-slate-200 mb-4" />
                         <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">No Corresponding Records Found</h4>
@@ -2692,6 +2854,53 @@
         return mockMatrixData;
       });
 
+      const generateMockReviewDeptData = () => {
+        const list = [];
+        const colleges = [
+          { name: "GITI Raghopur, Vaishali", division: "Muzaffarpur", compRate: 0.06, total: 44 },
+          { name: "GITI (Lwe) Nawada", division: "Patna", compRate: 0.0, total: 10 },
+          { name: "GITI Hilsa", division: "Patna", compRate: 0.0, total: 6 },
+          { name: "Govt Polytechnic, Araria", division: "Begusarai", compRate: 0.0, total: 6 },
+          { name: "Women'S Industrial Training Institute, Arah, Bhojpur", division: "Patna", compRate: 0.0, total: 2 },
+          { name: "GITI Naugachia", division: "Begusarai", compRate: 0.0, total: 1 },
+          { name: "Women'S Industrial Training Institute, Katihar", division: "Begusarai", compRate: 0.0, total: 1 },
+          { name: "GITI Dumraon", division: "Patna", compRate: 0.0, total: 1 },
+          { name: "GITI Araria", division: "Begusarai", compRate: 0.0, total: 1 },
+          { name: "GITI Mohania Kaimur", division: "Patna", compRate: 0.0, total: 1 },
+          { name: "GITI MUZAFFARPUR", division: "Muzaffarpur", compRate: 0.6, total: 150 },
+          { name: "GITI DARBHANGA", division: "Muzaffarpur", compRate: 0.8, total: 180 },
+          { name: "ITI DIGHA GHAT, PATNA", division: "Patna", compRate: 0.52, total: 120 }
+        ];
+        colleges.forEach((col) => {
+          for (let i = 0; i < col.total; i++) {
+            const completed = i < Math.floor(col.total * col.compRate);
+            list.push({
+              id: list.length + 1,
+              college: col.name,
+              status: completed ? "Completed" : "In Progress",
+              completedPercent: completed ? 100 : Math.floor(Math.random() * 80),
+              division: col.division
+            });
+          }
+        });
+        return list;
+      };
+
+      const [reviewDepartmentData, setReviewDepartmentData] = useState(() => {
+        try {
+          const cached = safeLocalStorage.getItem('cached_review_dept_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.error("Error reading cached review department data:", e);
+        }
+        return generateMockReviewDeptData();
+      });
+
       const [data, setData] = useState(() => {
         try {
           const cached = safeLocalStorage.getItem('cached_student_data');
@@ -2751,6 +2960,7 @@
           }
           return {
             ...item,
+            college: formatCollegeName(item.college),
             division: div
           };
         });
@@ -2934,7 +3144,7 @@
                       id: index + 1,
                       district: String(rawDistrict).trim(),
                       type: String(rawType).trim(),
-                      itiName: String(rawItiName).trim(),
+                      itiName: formatCollegeName(rawItiName),
                       misCode: String(rawMisCode).trim(),
                       totalSeats: parseNumOrNA(rawTotalSeats),
                       admitted: parseNumOrNA(rawAdmitted),
@@ -2947,11 +3157,15 @@
                     };
                   }).filter(item => item.itiName && item.itiName.toLowerCase() !== 'total' && !item.itiName.toLowerCase().includes('grand'));
                   
-                  setMatrixData(processed);
-                  try {
-                    safeLocalStorage.setItem('cached_matrix_data', JSON.stringify(processed));
-                  } catch (e) {
-                    console.warn("Storage write failed for matrixData:", e);
+                  if (processed && processed.length >= 10) {
+                    setMatrixData(processed);
+                    try {
+                      safeLocalStorage.setItem('cached_matrix_data', JSON.stringify(processed));
+                    } catch (e) {
+                      console.warn("Storage write failed for matrixData:", e);
+                    }
+                  } else {
+                    console.warn("Sync Warning: Fetched matrix data appears empty or corrupted. Keeping existing data.");
                   }
                 }
               }
@@ -2959,6 +3173,93 @@
           })
           .catch(err => {
             console.error("Matrix Sync Failure:", err);
+          });
+      };
+
+      const fetchReviewDepartmentData = () => {
+        if (typeof window.Papa === 'undefined') {
+          console.warn("Papa not loaded yet for review department fetch");
+          return;
+        }
+
+        const reviewUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9DApK8KKyzzUcIJK_EbtPCyAYVOqYLndR5O9obqyZoVBJzt5Yr10LYhEkrUEIkUzucVNhBkF2srgh/pub?output=csv&gid=493239070";
+        const cacheBuster = `&cb=${Date.now()}`;
+        fetch(reviewUrl + cacheBuster)
+          .then(res => {
+            if (!res.ok) throw new Error("Review Department fetch status: " + res.status);
+            return res.text();
+          })
+          .then(csvText => {
+            window.Papa.parse(csvText, {
+              header: true,
+              dynamicTyping: true,
+              skipEmptyLines: true,
+              complete: (results) => {
+                if (results.data && results.data.length > 0) {
+                  const firstRow = results.data[0];
+                  const keys = Object.keys(firstRow || {}).map(k => String(k).toLowerCase().trim());
+                  const hasCollege = keys.some(k => k.includes('college'));
+                  const hasStatus = keys.some(k => k.includes('status'));
+
+                  if (hasCollege && hasStatus) {
+                    const processed = results.data.map((row, index) => {
+                      const norm = (k) => String(k).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                      let obj = {};
+                      Object.keys(row).forEach(k => { obj[norm(k)] = row[k]; });
+
+                      const rawCollege = obj['college'] || '';
+                      let rawStatus = obj['status'] || '';
+                      if (typeof rawStatus === 'string') {
+                        const sVal = rawStatus.trim();
+                        if (sVal === '#N/A' || sVal === 'N/A' || sVal === 'NA' || sVal === '#NA' || sVal.toLowerCase() === 'na') {
+                          rawStatus = 'In Progress';
+                        }
+                      }
+
+                      let pct = 0;
+                      if (obj['completed'] !== undefined) {
+                        const sVal = String(obj['completed']).trim();
+                        if (sVal === '' || sVal === '#N/A' || sVal === 'N/A' || sVal === 'NA' || sVal === '#NA' || sVal.toLowerCase() === 'na') {
+                          pct = 0;
+                        } else {
+                          pct = parseFloat(sVal.replace('%', '')) || 0;
+                        }
+                      }
+
+                      let rawDivision = obj['division'] || '';
+                      if (typeof rawDivision === 'string') {
+                        const sVal = rawDivision.trim();
+                        if (sVal === '#N/A' || sVal === 'N/A' || sVal === 'NA' || sVal === '#NA' || sVal.toLowerCase() === 'na') {
+                          rawDivision = '';
+                        }
+                      }
+
+                      return {
+                        id: index + 1,
+                        college: formatCollegeName(rawCollege),
+                        status: String(rawStatus).trim(),
+                        completedPercent: pct,
+                        division: String(rawDivision).trim()
+                      };
+                    }).filter(item => item.college);
+
+                    if (processed.length >= 10) {
+                      setReviewDepartmentData(processed);
+                      try {
+                        safeLocalStorage.setItem('cached_review_dept_data', JSON.stringify(processed));
+                      } catch (e) {
+                        console.warn("Storage write failed for reviewDepartmentData:", e);
+                      }
+                    } else {
+                      console.warn("Sync Warning: Fetched review department data appears empty or corrupted. Keeping existing data.");
+                    }
+                  }
+                }
+              }
+            });
+          })
+          .catch(err => {
+            console.error("Review Department Sync Failure:", err);
           });
       };
 
@@ -3002,6 +3303,7 @@
               return;
             }
             fetchMatrix();
+            fetchReviewDepartmentData();
             fetch(cleanUrl)
               .then((response) => {
                 if (!response.ok) {
@@ -3086,15 +3388,21 @@
                           completedPercent: finalized ? 100 : completedValue
                         };
                       });
-                      setData(processed);
-                      setLastSync(new Date());
-                      setIsLive(true);
-                      
-                      try {
-                        safeLocalStorage.setItem('cached_student_data', JSON.stringify(processed));
-                        safeLocalStorage.setItem('last_sync_time', new Date().toISOString());
-                      } catch (e) {
-                        console.warn("Storage write/quota warning:", e);
+
+                      const validProcessed = processed.filter(item => item.college && item.college !== 'Unknown ITI' && item.lastName);
+                      if (validProcessed.length >= 10) {
+                        setData(validProcessed);
+                        setLastSync(new Date());
+                        setIsLive(true);
+                        
+                        try {
+                          safeLocalStorage.setItem('cached_student_data', JSON.stringify(validProcessed));
+                          safeLocalStorage.setItem('last_sync_time', new Date().toISOString());
+                        } catch (e) {
+                          console.warn("Storage write/quota warning:", e);
+                        }
+                      } else {
+                        console.warn("Sync Warning: Fetched student data appears empty or corrupted. Keeping existing data.");
                       }
                     } else {
                       console.warn("Sync Notice: No records found in CSV.");
@@ -3318,6 +3626,7 @@
                 <Dashboard 
                   data={filteredData} 
                   matrixData={matrixData}
+                  reviewDepartmentData={reviewDepartmentData}
                   lastSync={lastSync}
                   isLive={isLive}
                   onViewRegistry={(college) => {
@@ -3340,6 +3649,17 @@
                     safeLocalStorage.setItem('filter_currentPage', '1');
                     setRegistryFilter('');
                     setProgressRangeFilter(range);
+                    setActiveTab('students');
+                  }}
+                  onViewDivisionRegistry={(division) => {
+                    safeLocalStorage.setItem('filter_search', '');
+                    safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
+                    safeLocalStorage.setItem('filter_progress', JSON.stringify(['0% Completed', '1%-50% Completed', '51%-70% Completed', '71%-99% Completed', '100% Completed']));
+                    safeLocalStorage.setItem('filter_division', JSON.stringify([division]));
+                    safeLocalStorage.setItem('filter_college', JSON.stringify([]));
+                    safeLocalStorage.setItem('filter_currentPage', '1');
+                    setRegistryFilter('');
+                    setProgressRangeFilter('All');
                     setActiveTab('students');
                   }}
                 />
