@@ -537,6 +537,45 @@
         .trim();
     };
 
+    const formatMonthYear = (dateStr, fallback = "Blanks/Not Completed Yet") => {
+      if (!dateStr) return fallback;
+      const str = String(dateStr).trim();
+      if (str === '' || str === '#N/A' || str === 'N/A' || str === 'NA' || str === '#NA' || str.toLowerCase() === 'na' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') {
+        return fallback;
+      }
+      
+      if (/^\d{5,}$/.test(str)) {
+        return fallback;
+      }
+
+      if (!/[\d-/]/.test(str)) {
+        return fallback;
+      }
+
+      const match = str.match(/^(\d{4})-(\d{2})/);
+      if (match) {
+        const year = parseInt(match[1], 10);
+        const monthNum = parseInt(match[2], 10);
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        if (year >= 2020 && year <= 2035 && monthNum >= 1 && monthNum <= 12) {
+          return `${months[monthNum - 1]}'${year}`;
+        }
+      }
+
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        if (year >= 2020 && year <= 2035) {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          return `${months[d.getMonth()]}'${year}`;
+        }
+      }
+      return fallback;
+    };
+
+    const formatCompletedMonthYear = (dateStr) => formatMonthYear(dateStr, "Blanks/Not Completed Yet");
+    const formatStartedMonthYear = (dateStr) => formatMonthYear(dateStr, "Blanks/Not Registered Yet");
+
     const GOALS_MOCK = [
       { institution: "ITI Narkatiyaganj", totalAdmissions: 200, registered: 180, totalCompleted: 150 },
       { institution: "ITI Jhanjharpur", totalAdmissions: 150, registered: 140, totalCompleted: 110 },
@@ -859,7 +898,68 @@
 
           return matchesDivision && matchesCollege && matchesSearch;
         });
-      }, [enrichedMatrixData, safeDivisionFilter, safeCollegeFilter, searchQuery]);
+      }, [enrichedMatrixData, safeDivisionFilter, safeCollegeFilter, searchQuery]);      const collegeStaticMap = useMemo(() => {
+        const map = new Map();
+        matrixData.forEach(item => {
+          const norm = String(item.itiName || '').toLowerCase().trim();
+          if (norm) {
+            map.set(norm, {
+              totalSeats: item.totalSeats || 0,
+              admitted: item.admitted || 0,
+              division: item.division || ''
+            });
+          }
+        });
+        return map;
+      }, [matrixData]);
+
+      const groupedCollegesFromStudents = useMemo(() => {
+        const collegeGroups = {};
+        
+        filteredData.forEach(r => {
+          const colName = formatCollegeName(r.college || 'Unknown ITI');
+          if (!collegeGroups[colName]) {
+            collegeGroups[colName] = {
+              itiName: colName,
+              completed: 0,
+              lessThan50: 0,
+              moreThan50: 0,
+              notStarted: 0,
+              grandTotal: 0,
+              division: r.division || ''
+            };
+          }
+          
+          const stats = collegeGroups[colName];
+          stats.grandTotal++;
+          
+          let pComp = parseFloat(r.completedPercent);
+          if (isNaN(pComp)) {
+            pComp = r.status === 'Completed' ? 100 : 0;
+          }
+          
+          if (pComp >= 100) {
+            stats.completed++;
+          } else if (pComp > 50) {
+            stats.moreThan50++;
+          } else if (pComp > 0) {
+            stats.lessThan50++;
+          } else {
+            stats.notStarted++;
+          }
+        });
+
+        // Enrich with static matrix data (totalSeats, admitted)
+        return Object.values(collegeGroups).map(item => {
+          const norm = String(item.itiName).toLowerCase().trim();
+          const staticInfo = collegeStaticMap.get(norm) || { totalSeats: 0, admitted: 0 };
+          return {
+            ...item,
+            totalSeats: staticInfo.totalSeats || item.grandTotal,
+            admitted: staticInfo.admitted || item.grandTotal
+          };
+        });
+      }, [filteredData, collegeStaticMap]);
 
       const matrixMetrics = useMemo(() => {
         let completed = 0;
@@ -870,101 +970,41 @@
         let totalSeats = 0;
         let admitted = 0;
 
-        filteredMatrixData.forEach(item => {
-          completed += typeof item.completed === 'number' ? item.completed : 0;
-          lessThan50 += typeof item.lessThan50 === 'number' ? item.lessThan50 : 0;
-          moreThan50 += typeof item.moreThan50 === 'number' ? item.moreThan50 : 0;
-          notStarted += typeof item.notStarted === 'number' ? item.notStarted : 0;
-          grandTotal += typeof item.grandTotal === 'number' ? item.grandTotal : 0;
-          totalSeats += typeof item.totalSeats === 'number' ? item.totalSeats : 0;
-          admitted += typeof item.admitted === 'number' ? item.admitted : 0;
+        groupedCollegesFromStudents.forEach(item => {
+          completed += item.completed;
+          lessThan50 += item.lessThan50;
+          moreThan50 += item.moreThan50;
+          notStarted += item.notStarted;
+          grandTotal += item.grandTotal;
+          totalSeats += item.totalSeats;
+          admitted += item.admitted;
         });
 
         return { completed, lessThan50, moreThan50, notStarted, grandTotal, totalSeats, admitted };
-      }, [filteredMatrixData]);
+      }, [groupedCollegesFromStudents]);
 
       const top10ITIsFromMatrix = useMemo(() => {
-        return [...filteredMatrixData]
-          .sort((a, b) => {
-            const compA = typeof a.completed === 'number' ? a.completed : 0;
-            const compB = typeof b.completed === 'number' ? b.completed : 0;
-            return compB - compA;
-          })
+        return [...groupedCollegesFromStudents]
+          .sort((a, b) => b.completed - a.completed)
           .slice(0, 10);
-      }, [filteredMatrixData]);
-
-      const reviewDeptGroupedColleges = useMemo(() => {
-        const collegeMap = new Map();
-        reviewDepartmentData.forEach((row) => {
-          const rawCollege = row.college || '';
-          if (!rawCollege) return;
-          const college = formatCollegeName(rawCollege);
-          
-          const pct = typeof row.completedPercent === 'number' ? row.completedPercent : 0;
-          const isCompleted = String(row.status || '').toLowerCase() === 'completed' || pct >= 100;
-
-          if (!collegeMap.has(college)) {
-            collegeMap.set(college, { 
-              itiName: college, 
-              grandTotal: 0, 
-              completed: 0, 
-              division: String(row.division || '').trim() 
-            });
-          }
-          const stats = collegeMap.get(college);
-          stats.grandTotal++;
-          if (isCompleted) stats.completed++;
-        });
-
-        return Array.from(collegeMap.values());
-      }, [reviewDepartmentData]);
+      }, [groupedCollegesFromStudents]);
 
       const zeroProgressColleges = useMemo(() => {
-        const filtered = reviewDeptGroupedColleges.filter(record => {
-          const recordDiv = String(record.division || '').replace(/division/i, '').trim().toLowerCase();
-          const matchesDivision = safeDivisionFilter.length === 0 || safeDivisionFilter.some(div => {
-            const d = div.replace(/division/i, '').trim().toLowerCase();
-            const isMuzRecord = recordDiv === 'tirhut' || recordDiv === 'muzaffarpur' || recordDiv === 'muzaffapur';
-            const isMuzFilter = d === 'tirhut' || d === 'muzaffarpur' || d === 'muzaffapur';
-            if (isMuzRecord && isMuzFilter) {
-              return true;
-            }
-            return recordDiv === d;
-          });
-
-          const recordItiNorm = String(record.itiName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          const matchesCollege = safeCollegeFilter.length === 0 || safeCollegeFilter.some(colName => {
-            const cNorm = String(colName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            return recordItiNorm === cNorm || recordItiNorm.includes(cNorm) || cNorm.includes(recordItiNorm);
-          });
-
-          const q = searchQuery.toLowerCase().trim();
-          const matchesSearch = !q || 
-            String(record.itiName || '').toLowerCase().includes(q) ||
-            String(record.division || '').toLowerCase().includes(q);
-
-          return matchesDivision && matchesCollege && matchesSearch;
-        });
-
-        return filtered
+        return [...groupedCollegesFromStudents]
           .filter(x => {
-            const gt = typeof x.grandTotal === 'number' ? x.grandTotal : 0;
-            const comp = typeof x.completed === 'number' ? x.completed : 0;
+            const gt = x.grandTotal;
+            const comp = x.completed;
             if (gt < 15) return true;
             return (comp / gt) < 0.30;
           })
           .sort((a, b) => {
-            const gtA = typeof a.grandTotal === 'number' ? a.grandTotal : 0;
-            const compA = typeof a.completed === 'number' ? a.completed : 0;
-            const gtB = typeof b.grandTotal === 'number' ? b.grandTotal : 0;
-            const compB = typeof b.completed === 'number' ? b.completed : 0;
-            return (gtB - compB) - (gtA - compA);
+            return (b.grandTotal - b.completed) - (a.grandTotal - a.completed);
           });
-      }, [reviewDeptGroupedColleges, safeDivisionFilter, safeCollegeFilter, searchQuery]);
+      }, [groupedCollegesFromStudents]);
 
       const divisionMetricsFromMatrix = useMemo(() => {
         const divisionsMap = {};
-        filteredMatrixData.forEach(item => {
+        groupedCollegesFromStudents.forEach(item => {
           let div = String(item.division || 'Other').trim();
           if (!div || div === 'NA' || div === '#N/A') return;
           div = div.charAt(0).toUpperCase() + div.slice(1).toLowerCase();
@@ -972,13 +1012,10 @@
           if (!divisionsMap[div]) {
             divisionsMap[div] = { registrations: 0, completed: 0, admitted: 0 };
           }
-          const reg = typeof item.grandTotal === 'number' ? item.grandTotal : 0;
-          const comp = typeof item.completed === 'number' ? item.completed : 0;
-          const adm = typeof item.admitted === 'number' ? item.admitted : 0;
           
-          divisionsMap[div].registrations += reg;
-          divisionsMap[div].completed += comp;
-          divisionsMap[div].admitted += adm;
+          divisionsMap[div].registrations += item.grandTotal;
+          divisionsMap[div].completed += item.completed;
+          divisionsMap[div].admitted += item.admitted;
         });
 
         return Object.entries(divisionsMap).map(([name, stats]) => ({
@@ -987,7 +1024,7 @@
           completed: stats.completed,
           admitted: stats.admitted
         })).sort((a, b) => b.registrations - a.registrations);
-      }, [filteredMatrixData]);
+      }, [groupedCollegesFromStudents]);
 
       const recentPerformance = useMemo(() => getRecentPerformance(filteredData), [filteredData]);
 
@@ -2039,7 +2076,7 @@
       );
     };
 
-    const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange }) => {
+    const StudentTable = ({ data, initialSearch = '', onSearchChange, initialProgressFilter = 'All', onProgressFilterChange, selectedMonths = [], setSelectedMonths, availableMonths = [] }) => {
       const [displaySearch, setDisplaySearch] = useState(() => {
         return safeLocalStorage.getItem('filter_search') || initialSearch || '';
       });
@@ -2443,6 +2480,17 @@
                   <LucideIcon name="download" className="w-4 h-4 text-amber-400" /> <span>Export PDF</span>
                 </button>
               </div>
+            </div>
+
+            {/* Month-Wise Filter */}
+            <div className="bg-slate-50 border border-slate-150 p-4 rounded-2xl max-w-xs md:max-w-md">
+              <MultiSelectDropdown 
+                label="Filter by Completion Month"
+                options={availableMonths}
+                selectedValues={selectedMonths}
+                onChange={setSelectedMonths}
+                placeholder="All Months"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -3065,9 +3113,54 @@
 
 
 
-      const filteredData = useMemo(() => {
-        return safeData;
+      const [selectedMonths, setSelectedMonths] = useState([]);
+
+      const availableMonths = useMemo(() => {
+        const monthsSet = new Set();
+        safeData.forEach(item => {
+          const compFormatted = formatCompletedMonthYear(item.completedAt);
+          if (compFormatted && compFormatted !== "Blanks/Not Completed Yet") {
+            monthsSet.add(compFormatted);
+          }
+          const regFormatted = formatStartedMonthYear(item.startedAt);
+          if (regFormatted && regFormatted !== "Blanks/Not Registered Yet") {
+            monthsSet.add(regFormatted);
+          }
+        });
+        
+        const monthOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const sorted = Array.from(monthsSet).sort((a, b) => {
+          const partsA = a.split("'");
+          const partsB = b.split("'");
+          const aMonth = partsA[0];
+          const aYear = partsA[1] || "";
+          const bMonth = partsB[0];
+          const bYear = partsB[1] || "";
+          if (aYear !== bYear) {
+            return parseInt(aYear, 10) - parseInt(bYear, 10);
+          }
+          return monthOrder.indexOf(aMonth) - monthOrder.indexOf(bMonth);
+        });
+        
+        sorted.push("Blanks/Not Completed Yet");
+        sorted.push("Blanks/Not Registered Yet");
+        
+        if (sorted.length <= 2) {
+          return ["Apr'2026", "May'2026", "Jun'2026", "Blanks/Not Completed Yet", "Blanks/Not Registered Yet"];
+        }
+        return sorted;
       }, [safeData]);
+
+      const filteredData = useMemo(() => {
+        if (selectedMonths.length > 0) {
+          return safeData.filter(item => {
+            const compFormatted = formatCompletedMonthYear(item.completedAt);
+            const regFormatted = formatStartedMonthYear(item.startedAt);
+            return selectedMonths.includes(compFormatted) || selectedMonths.includes(regFormatted);
+          });
+        }
+        return safeData;
+      }, [safeData, selectedMonths]);
 
       const mockData = useMemo(() => [
         { firstName: "Ramesh", lastName: "Singh", college: "ITI Narkatiyaganj", status: "Completed", division: "Muzaffarpur", gender: "Male", incomeLevel: "Low", trade: "Electrician", category: "General", completedPercent: 100, startedAt: "2023-11-01", completedAt: "2023-12-05", phoneNumber: "9876543210", email: "ramesh.singh@example.com" },
@@ -3544,6 +3637,18 @@
                 <LucideIcon name="play-circle" className="w-3 h-3" /> Tutorials
               </a>
             </div>
+
+            {activeTab === 'overview' && (
+              <div className="bg-slate-50 px-3 pb-3 border-b border-slate-200">
+                <MultiSelectDropdown 
+                  label="Filter by Completion Month"
+                  options={availableMonths}
+                  selectedValues={selectedMonths}
+                  onChange={setSelectedMonths}
+                  placeholder="All Months"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex flex-1 overflow-hidden">
@@ -3618,6 +3723,18 @@
                     </div>
                   </div>
                 </div>
+
+                {activeTab === 'overview' && (
+                  <div className="pt-6 border-t border-slate-100">
+                    <MultiSelectDropdown 
+                      label="Filter by Completion Month"
+                      options={availableMonths}
+                      selectedValues={selectedMonths}
+                      onChange={setSelectedMonths}
+                      placeholder="All Months"
+                    />
+                  </div>
+                )}
               </div>
             </aside>
 
@@ -3670,6 +3787,9 @@
                   onSearchChange={setRegistryFilter}
                   initialProgressFilter={progressRangeFilter}
                   onProgressFilterChange={setProgressRangeFilter}
+                  selectedMonths={selectedMonths}
+                  setSelectedMonths={setSelectedMonths}
+                  availableMonths={availableMonths}
                 />
               )}
             </main>
