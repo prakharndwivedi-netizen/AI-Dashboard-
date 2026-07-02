@@ -620,7 +620,8 @@
       onViewProgressRegistry, 
       onViewDivisionRegistry,
       lastSync, 
-      isLive 
+      isLive,
+      setSelectedMonths
     }) => {
       const [statusFilter, setStatusFilter] = useState(() => {
         try {
@@ -1191,6 +1192,9 @@
                     setCollegeFilter([]);
                     setDisplaySearch('');
                     setSearchQuery('');
+                    if (setSelectedMonths) {
+                      setSelectedMonths([]);
+                    }
                   }}
                   className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-6 py-3 rounded-xl shadow-sm hover:scale-105 active:scale-95 transition-all outline-none border border-slate-200"
                 >
@@ -2330,6 +2334,7 @@
         setCurrentPage(1);
         if (onSearchChange) onSearchChange('');
         if (onProgressFilterChange) onProgressFilterChange('All');
+        if (setSelectedMonths) setSelectedMonths([]);
         
          safeLocalStorage.removeItem('registryFilter');
         safeLocalStorage.removeItem('progressRangeFilter');
@@ -2482,17 +2487,6 @@
               </div>
             </div>
 
-            {/* Month-Wise Filter */}
-            <div className="bg-slate-50 border border-slate-150 p-4 rounded-2xl max-w-xs md:max-w-md">
-              <MultiSelectDropdown 
-                label="Filter by Completion Month"
-                options={availableMonths}
-                selectedValues={selectedMonths}
-                onChange={setSelectedMonths}
-                placeholder="All Months"
-              />
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <MultiSelectDropdown 
                 label="Process State"
@@ -2535,6 +2529,14 @@
                   setCollegeFilter(vals);
                   setCurrentPage(1);
                 }}
+              />
+
+              <MultiSelectDropdown 
+                label="Filter by Completion Month"
+                options={availableMonths}
+                selectedValues={selectedMonths}
+                onChange={setSelectedMonths}
+                placeholder="All Months"
               />
 
               <div className="space-y-1.5">
@@ -3746,6 +3748,7 @@
                   reviewDepartmentData={reviewDepartmentData}
                   lastSync={lastSync}
                   isLive={isLive}
+                  setSelectedMonths={setSelectedMonths}
                   onViewRegistry={(college) => {
                     safeLocalStorage.setItem('filter_search', college);
                     safeLocalStorage.setItem('filter_status', JSON.stringify(['Completed', 'In Progress']));
